@@ -1,0 +1,11 @@
+# BOM Diff Tool - 依存パッケージ
+# インストール: pip install -r requirements.txt
+
+# データ処理
+pandas>=2.0.0
+
+# Excel 読み書き
+openpyxl>=3.1.0
+
+# DigiKey API 通信（オプション：DigiKey連携を使わない場合は不要）
+requests>=2.31.0

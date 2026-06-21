@@ -1,0 +1,39 @@
+; BOM Diff Tool - 設定ファイルテンプレート
+;
+; このファイルをコピーして config.ini にリネームし、
+; 各値を実際の認証情報に書き換えてください。
+;
+;   cp config.ini.example config.ini
+;
+; 【セキュリティ注意】
+; config.ini は .gitignore に含まれており、Git にコミットされません。
+; APIキーや認証情報を誤ってコミットしないよう注意してください。
+;
+; 代替手段: 環境変数での設定（こちらを推奨）
+;   Windows PowerShell:
+;     $env:DIGIKEY_CLIENT_ID     = "your_client_id"
+;     $env:DIGIKEY_CLIENT_SECRET = "your_client_secret"
+;   Mac / Linux:
+;     export DIGIKEY_CLIENT_ID=your_client_id
+;     export DIGIKEY_CLIENT_SECRET=your_client_secret
+
+; ── DigiKey API 認証情報 ──
+; DigiKey Developer Portal で取得: https://developer.digikey.com/
+[digikey]
+client_id     = YOUR_CLIENT_ID_HERE
+client_secret = YOUR_CLIENT_SECRET_HERE
+
+; ── BOM カラム名設定（GUIの ⚙ 設定 から変更可能） ──
+; 入力Excelファイルのカラムヘッダー名に合わせて変更してください。
+[columns]
+part_number  = Manufacturer Part Number
+manufacturer = Manufacturer Name
+quantity     = Requested Quantity 1
+description  = Description
+
+; ── Excel レポートのシート名 ──
+[sheet_names]
+added   = 追加部品
+removed = 削除部品
+qty     = Qty変更
+mfr     = Mfr変更
