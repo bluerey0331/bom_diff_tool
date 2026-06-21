@@ -1,23 +1,55 @@
-### AL ###
-#Template for AL projects for Dynamics 365 Business Central
-#launch.json folder
+# ============================================================
+# BOM Diff Tool - .gitignore
+# ============================================================
+
+# ── 設定ファイル（APIキー・認証情報を含む） ──
+config.ini
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# ── 仮想環境 ──
+.venv/
+venv/
+env/
+ENV/
+
+# ── Excel ファイル（サンプル以外） ──
+old.xlsx
+new.xlsx
+bom_diff_report.xlsx
+# サンプルファイルは除外しない
+!sample_old.xlsx
+!sample_new.xlsx
+
+# ── IDE / エディタ ──
 .vscode/
-#Cache folder
-.alcache/
-#Symbols folder
-.alpackages/
-#Snapshots folder
-.snapshots/
-#Testing Output folder
-.output/
-#Extension App-file
-*.app
-#Rapid Application Development File
-rad.json
-#Translation Base-file
-*.g.xlf
-#License-files
-*.bclicense
-*.flf
-#Test results file
-TestResults.xml
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── テスト・カバレッジ ──
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── Claude Code 内部設定 ──
+CLAUDE.md
+
+# ── デバッグ用スクリプト ──
+debug_*.py

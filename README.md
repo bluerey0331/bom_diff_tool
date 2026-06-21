@@ -1,22 +1,22 @@
 # BOM Diff Tool
 
-A Python desktop tool for comparing BOM (Bill of Materials) files and detecting differences.  
-Also supports lifecycle checking (Obsolete / NRND detection) via the DigiKey API.
+BOM（部品表）を比較して差分を検出する Python 製デスクトップツールです。  
+DigiKey API を使ったライフサイクルチェック（廃品・NRND 検出）にも対応しています。
 
-**[日本語版はこちら → README_JP.md](README_JP.md)**
+**[English README is here → README_EN.md](README_EN.md)**
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  ⬡  BOM Diff Tool                   v1.0.0 + DigiKey  │
+│  ⬡  BOM Diff Tool                    v1.0.0 + DigiKey  │
 ├──────────────┬──────────────────────────────────────────┤
-│ OLD BOM FILE │  ┌─ Tabs ─────────────────────────────┐  │
+│ OLD BOM FILE │  ┌─ タブ ────────────────────────────┐  │
 │ [old.xlsx ]… │  │ ＋Added │－Removed │△Qty │△Mfr    │  │
 │              │  ├───────────────────────────────────┤  │
 │ NEW BOM FILE │  │ Part Number  │ Mfr Name │ Qty │ ... │  │
 │ [new.xlsx ]… │  │ GRM188R61... │ Murata   │ 100 │ ... │  │
 │              │  └───────────────────────────────────┘  │
 │ ▶ Compare   │                                          │
-│ ──────────── │  ⚡ Lifecycle Tab                        │
+│ ──────────── │  ⚡ Lifecycle タブ                       │
 │ DIGIKEY API  │  ┌───────────────────────────────────┐  │
 │ Client ID    │  │ Part Number  │ Status    │ ...     │  │
 │ [••••••••••] │  │ GRM188R61... │ Obsolete  │ ...     │  │
@@ -27,7 +27,7 @@ Also supports lifecycle checking (Obsolete / NRND detection) via the DigiKey API
 │ SUMMARY      │  │ Mfr Part No  │ DigiKey P/N │ ...  │  │
 │ Added    [ 1]│  └───────────────────────────────────┘  │
 │ Removed  [ 1]│                                          │
-│ Qty Δ    [ 1]│                               ⚙ Settings│
+│ Qty Δ    [ 1]│                                ⚙ 設定   │
 │ Mfr Δ    [ 1]│                                          │
 │ Obsolete [ 2]│                                          │
 │ NRND     [ 1]│                                          │
@@ -37,70 +37,70 @@ Also supports lifecycle checking (Obsolete / NRND detection) via the DigiKey API
 
 ---
 
-## Features
+## 機能一覧
 
-| Feature | Description |
+| 機能 | 説明 |
 |---|---|
-| BOM diff comparison | Automatically detects added, removed, quantity changes, and manufacturer changes |
-| Custom column names | Change column names via ⚙ Settings (saved to config.ini) |
-| DigiKey lifecycle check | Color-coded display of Active / NRND / Obsolete status |
-| Substitute parts display | Shows DigiKey Substitutions and RecommendedProducts |
-| Excel report output | Exports results to separate sheets in an Excel file |
-| Prepare tool | Removes unnecessary columns from any Excel file and saves as old/new.xlsx |
-| CLI mode | Run without GUI using the `--cli` option |
+| BOM 差分比較 | 追加・削除・Quantity変更・Manufacturer変更を自動検出 |
+| カラム名カスタマイズ | ⚙ 設定から任意のカラム名に変更可能（config.ini に保存） |
+| DigiKey ライフサイクル | Active / NRND / Obsolete を色分け表示 |
+| 代替品表示 | DigiKey Substitutions / RecommendedProducts を表示 |
+| Excel レポート出力 | 差分・ライフサイクル結果をシート別に出力 |
+| Prepare ツール | 任意Excelから不要列を削除して old/new.xlsx として保存 |
+| CLI モード | `--cli` オプションで GUI なし実行可能 |
 
 ---
 
-## Requirements
+## 必要環境
 
-- Python 3.11 or later
-- Windows / macOS / Linux (requires tkinter)
+- Python 3.11 以上
+- Windows / macOS / Linux（tkinter が使える環境）
 
 ---
 
-## Installation
+## インストール
 
 ```bash
-# 1. Clone the repository
+# 1. リポジトリをクローン
 git clone https://github.com/your-username/bom-diff-tool.git
 cd bom-diff-tool
 
-# 2. Install dependencies
+# 2. 依存パッケージをインストール
 pip install -r requirements.txt
 
-# 3. Create the config file
+# 3. 設定ファイルを作成
 cp config.ini.example config.ini
-# Open config.ini and set your DigiKey API credentials
+# config.ini をエディタで開いて DigiKey APIキーを設定
 ```
 
 ---
 
-## Usage
+## 使い方
 
-### BOM Comparison Tool (Main)
+### BOM 比較ツール（メイン）
 
 ```bash
-python main.py          # GUI mode (default)
-python main.py --cli    # CLI mode
+python main.py          # GUI モード（デフォルト）
+python main.py --cli    # CLI モード
 ```
 
-**GUI workflow:**
+**GUI の操作フロー：**
 
-1. Select the OLD and NEW Excel files
-2. Click **▶ Compare** to view the differences
-3. Enter your DigiKey API credentials and click **⚡ Check Lifecycle** (optional)
-4. Click **↓ Save Excel Report** to export the results
+1. OLD / NEW の Excel ファイルを選択
+2. **▶ Compare** をクリックして差分を確認
+3. DigiKey APIキーを入力して **⚡ Check Lifecycle** をクリック（任意）
+4. **↓ Save Excel Report** でレポートを保存
 
-### Prepare Tool (Preprocessing)
+### Prepare ツール（前処理）
 
 ```bash
 python prepare.py
 ```
 
-Removes unnecessary columns from any Excel file and saves it as `old.xlsx` or `new.xlsx`.  
-When you change column names via **⚙ Settings**, the 4 configured columns are automatically checked ON.
+Excel ファイルから不要な列を削除して `old.xlsx` / `new.xlsx` として保存します。  
+**⚙ 設定** から使用するカラム名を変更すると、設定した4列が自動的にチェックONになります。
 
-### CLI Mode
+### CLI モード
 
 ```bash
 python main.py --cli --old old.xlsx --new new.xlsx --output report.xlsx
@@ -108,30 +108,27 @@ python main.py --cli --old old.xlsx --new new.xlsx --output report.xlsx
 
 ---
 
-## Custom Column Names
+## カラム名のカスタマイズ
 
-The default column names are:
+デフォルトのカラム名は以下の通りです。
 
-| Role | Default |
+| 論理名 | デフォルト |
 |---|---|
-| Part Number (index key) | `Manufacturer Part Number` |
+| Part Number（キー列） | `Manufacturer Part Number` |
 | Manufacturer | `Manufacturer Name` |
 | Quantity | `Requested Quantity 1` |
 | Description | `Description` |
 
-**How to change:** Click the ⚙ Settings button in the GUI → enter column names → save.  
-Settings are automatically saved to `config.ini` and persist across restarts.
-
-> **Note:** Column names must match the actual header names in your Excel files exactly.  
-> Use the **Prepare tool** to keep only the 4 required columns before running the comparison.
+**変更方法：** GUI の ⚙ 設定 ボタン → カラム名を入力 → 保存  
+設定は `config.ini` に自動保存され、次回起動時も維持されます。
 
 ---
 
-## DigiKey API Setup
+## DigiKey API の設定
 
-1. Create an account at [DigiKey Developer Portal](https://developer.digikey.com/)
-2. Register an application to get a **Client ID** and **Client Secret**
-3. Add the credentials to `config.ini` or use environment variables
+1. [DigiKey Developer Portal](https://developer.digikey.com/) でアカウントを作成
+2. アプリを登録して **Client ID** と **Client Secret** を取得
+3. `config.ini` に設定（または環境変数を使用）
 
 ```ini
 [digikey]
@@ -139,7 +136,7 @@ client_id     = YOUR_CLIENT_ID_HERE
 client_secret = YOUR_CLIENT_SECRET_HERE
 ```
 
-**Using environment variables (recommended):**
+**環境変数での設定（推奨）：**
 
 ```bash
 # Windows
@@ -153,21 +150,10 @@ export DIGIKEY_CLIENT_SECRET=your_client_secret
 
 ---
 
-## Lifecycle Status Colors
+## サンプルデータ
 
-| Color | Status | Meaning |
-|---|---|---|
-| 🔴 Red | Obsolete | Part has been discontinued |
-| 🟠 Orange | NRND | Not Recommended for New Designs |
-| 🟢 Green | Active | Currently available |
-| ⬛ Gray | Unknown | Not found in DigiKey |
-
----
-
-## Sample Data
-
-`sample_old.xlsx` and `sample_new.xlsx` contain dummy data for testing.  
-To try it out immediately:
+`sample_old.xlsx` と `sample_new.xlsx` に動作確認用のダミーデータが含まれています。  
+すぐに試したい場合は以下を実行してください。
 
 ```bash
 cp sample_old.xlsx old.xlsx
@@ -175,50 +161,41 @@ cp sample_new.xlsx new.xlsx
 python main.py
 ```
 
-The sample data includes the following changes between old and new:
-
-| Change type | Part |
-|---|---|
-| Added | RC0402JR-070R1L |
-| Removed | MMBT3904LT1G |
-| Quantity changed | LQW18AN10NG00D (50 → 80) |
-| Manufacturer changed | ERJ-2RKF1001X (Panasonic → Yageo) |
-
 ---
 
-## Project Structure
+## プロジェクト構成
 
 ```
 bom-diff-tool/
-├── main.py                  # Entry point (BOM comparison tool)
-├── prepare.py               # Preprocessing tool
-├── requirements.txt         # Python dependencies
-├── config.ini.example       # Config file template (no credentials)
-├── sample_old.xlsx          # Sample data (old BOM)
-├── sample_new.xlsx          # Sample data (new BOM)
-├── README.md                # This file (English)
-├── README_JP.md             # Japanese README
+├── main.py                  # エントリーポイント（BOM比較ツール）
+├── prepare.py               # 前処理ツール
+├── requirements.txt         # 依存パッケージ
+├── config.ini.example       # 設定ファイルのテンプレート
+├── sample_old.xlsx          # サンプルデータ（旧BOM）
+├── sample_new.xlsx          # サンプルデータ（新BOM）
+├── README.md                # このファイル（日本語）
+├── README_EN.md             # 英語版 README
 ├── LICENSE                  # MIT License
-├── CHANGELOG.md             # Version history
+├── CHANGELOG.md             # 変更履歴
 ├── src/
-│   ├── column_config.py     # Column name settings (read/write)
-│   ├── comparator.py        # BOM comparison logic
-│   ├── digikey_client.py    # DigiKey API client
-│   ├── gui.py               # Main GUI
-│   ├── loader.py            # Excel loader
-│   ├── preprocessor.py      # Preprocessing logic
-│   ├── report.py            # Excel report output
-│   └── settings_dialog.py   # Column name settings dialog
+│   ├── column_config.py     # カラム名設定の読み書き
+│   ├── comparator.py        # BOM比較ロジック
+│   ├── digikey_client.py    # DigiKey API クライアント
+│   ├── gui.py               # メインGUI
+│   ├── loader.py            # Excel読み込み
+│   ├── preprocessor.py      # 前処理ロジック
+│   ├── report.py            # Excelレポート出力
+│   └── settings_dialog.py   # カラム名設定ダイアログ
 ├── tests/
-│   └── test_all.py          # Automated tests (pytest)
+│   └── test_all.py          # 自動テスト（pytest）
 └── .github/
     └── workflows/
-        └── test.yml         # GitHub Actions CI
+        └── test.yml         # GitHub Actions 自動テスト
 ```
 
 ---
 
-## Running Tests
+## テストの実行
 
 ```bash
 pip install pytest
@@ -227,6 +204,6 @@ pytest tests/ -v
 
 ---
 
-## License
+## ライセンス
 
 [MIT License](LICENSE)
