@@ -44,21 +44,32 @@ Supports lifecycle checking (Obsolete / NRND detection) via the **DigiKey API** 
 
 ## Demo
 
+Select your BOM files, click **▶ Compare**, and see differences highlighted immediately.
+
 ![Demo](demo.gif)
+
+| Step | What happens |
+|---|---|
+| **① File selection** | Load `old.xlsx` and `new.xlsx` using the **…** buttons |
+| **② ▶ Compare** | Differences are detected and categorized automatically |
+| **③ Results** | Added / Removed / Qty Changed / Mfr Changed appear in color-coded tabs |
 
 ---
 
 ## Screenshots
 
-**① Select old.xlsx and new.xlsx, then click ▶ Compare**
+**① Select old.xlsx and new.xlsx — files and column headers are recognized automatically**
 
 ![File selection](screenshots/01_files_loaded.png)
 
-**② Differences are displayed in color-coded tabs (Added / Removed / Qty Changed / Mfr Changed)**
+**② Click ▶ Compare — differences are displayed in the Added tab (green rows)**
 
 ![Comparison result](screenshots/02_compare_result.png)
 
-**③ Results are exported to an Excel report (bom_diff_report.xlsx)**
+> The status bar at the bottom shows a summary: number of differences and parts in the new BOM.  
+> Use the **⚡ Check DigiKey** or **⚡ Check Mouser** buttons to run a lifecycle check on the new parts.
+
+**③ The Excel report (bom_diff_report.xlsx) is saved with results split across sheets**
 
 ![Report saved](screenshots/03_report_saved.png)
 
