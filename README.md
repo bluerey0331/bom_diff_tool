@@ -42,6 +42,22 @@ Supports lifecycle checking (Obsolete / NRND detection) via the **DigiKey API** 
 
 ---
 
+## Screenshots
+
+**① Select old.xlsx and new.xlsx, then click ▶ Compare**
+
+![File selection](screenshots/01_files_loaded.png)
+
+**② Differences are displayed in color-coded tabs (Added / Removed / Qty Changed / Mfr Changed)**
+
+![Comparison result](screenshots/02_compare_result.png)
+
+**③ Results are exported to an Excel report (bom_diff_report.xlsx)**
+
+![Report saved](screenshots/03_report_saved.png)
+
+---
+
 ## Features
 
 | Feature | Description |

@@ -42,6 +42,22 @@ BOM（部品表）を比較して差分を検出する Python 製デスクトッ
 
 ---
 
+## スクリーンショット
+
+**① old.xlsx と new.xlsx を選択して ▶ Compare をクリック**
+
+![ファイル選択](screenshots/01_files_loaded.png)
+
+**② 差分がタブ別に色分けで表示される（Added / Removed / Qty Changed / Mfr Changed）**
+
+![比較結果](screenshots/02_compare_result.png)
+
+**③ 結果が Excel レポート（bom_diff_report.xlsx）として出力される**
+
+![レポート保存](screenshots/03_report_saved.png)
+
+---
+
 ## 機能一覧
 
 | 機能 | 説明 |
