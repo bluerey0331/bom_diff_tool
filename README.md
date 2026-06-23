@@ -42,6 +42,12 @@ Supports lifecycle checking (Obsolete / NRND detection) via the **DigiKey API** 
 
 ---
 
+## Demo
+
+![Demo](demo.gif)
+
+---
+
 ## Screenshots
 
 **① Select old.xlsx and new.xlsx, then click ▶ Compare**

@@ -42,6 +42,12 @@ BOM（部品表）を比較して差分を検出する Python 製デスクトッ
 
 ---
 
+## デモ
+
+![Demo](demo.gif)
+
+---
+
 ## スクリーンショット
 
 **① old.xlsx と new.xlsx を選択して ▶ Compare をクリック**
