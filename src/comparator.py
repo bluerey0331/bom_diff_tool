@@ -55,7 +55,8 @@ def find_quantity_changes(
     old_qty = pd.to_numeric(old_df.loc[common_index, col], errors="coerce")
     new_qty = pd.to_numeric(new_df.loc[common_index, col], errors="coerce")
 
-    changed_index = common_index[old_qty != new_qty]
+    changed_mask  = (old_qty != new_qty) & ~(old_qty.isna() & new_qty.isna())
+    changed_index = common_index[changed_mask]
     return pd.DataFrame({
         f"Old {col}": old_df.loc[changed_index, col],
         f"New {col}": new_df.loc[changed_index, col],
@@ -76,7 +77,7 @@ def find_manufacturer_changes(
     new_mfr = new_df.loc[common_index, col]
 
     changed_index = common_index[
-        old_mfr.str.lower() != new_mfr.str.lower()
+        old_mfr.str.lower().fillna("") != new_mfr.str.lower().fillna("")
     ]
     return pd.DataFrame({
         f"Old {col}": old_df.loc[changed_index, col],

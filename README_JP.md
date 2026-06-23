@@ -1,38 +1,43 @@
 # BOM Diff Tool
 
 BOM（部品表）を比較して差分を検出する Python 製デスクトップツールです。  
-DigiKey API を使ったライフサイクルチェック（廃品・NRND 検出）にも対応しています。
+**DigiKey API** / **Mouser API** を使ったライフサイクルチェック（廃品・NRND 検出）にも対応しています。
 
 **[English README is here → README.md](README.md)**
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  ⬡  BOM Diff Tool                   v1.0.0 + DigiKey  │
-├──────────────┬──────────────────────────────────────────┤
-│ OLD BOM FILE │  ┌─ タブ ────────────────────────────┐  │
-│ [old.xlsx ]… │  │ ＋Added │－Removed │△Qty │△Mfr    │  │
-│              │  ├───────────────────────────────────┤  │
-│ NEW BOM FILE │  │ Part Number  │ Mfr Name │ Qty │ ... │  │
-│ [new.xlsx ]… │  │ GRM188R61... │ Murata   │ 100 │ ... │  │
-│              │  └───────────────────────────────────┘  │
-│ ▶ Compare   │                                          │
-│ ──────────── │  ⚡ Lifecycle タブ                       │
-│ DIGIKEY API  │  ┌───────────────────────────────────┐  │
-│ Client ID    │  │ Part Number  │ Status    │ ...     │  │
-│ [••••••••••] │  │ GRM188R61... │ Obsolete  │ ...     │  │
-│ Client Secret│  │ LQW18AN10... │ NRND      │ ...     │  │
-│ [••••••••••] │  └───────────────────────────────────┘  │
-│⚡ Check Life.│  DIGIKEY SUBSTITUTES                     │
-│ ──────────── │  ┌───────────────────────────────────┐  │
-│ SUMMARY      │  │ Mfr Part No  │ DigiKey P/N │ ...  │  │
-│ Added    [ 1]│  └───────────────────────────────────┘  │
-│ Removed  [ 1]│                                          │
-│ Qty Δ    [ 1]│                                ⚙ 設定   │
-│ Mfr Δ    [ 1]│                                          │
-│ Obsolete [ 2]│                                          │
-│ NRND     [ 1]│                                          │
-│↓ Save Report │                                          │
-└──────────────┴──────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  ⬡  BOM Diff Tool          v2.2  +  DigiKey / Mouser API   │
+├───────────────┬──────────────────────────────────────────────┤
+│ OLD BOM FILE  │  ┌─ タブ ─────────────────────────────────┐ │
+│ [old.xlsx  ]… │  │ ＋Added │－Removed │△Qty │△Mfr │⚡Life │ │
+│               │  ├─────────────────────────────────────────┤ │
+│ NEW BOM FILE  │  │ Part Number  │ Mfr Name │ Qty  │  ...   │ │
+│ [new.xlsx  ]… │  │ GRM188R61... │ Murata   │ 100  │  ...   │ │
+│               │  └─────────────────────────────────────────┘ │
+│ ▶ Compare    │                                               │
+│ ─────────────│  ⚡ Lifecycle タブ                             │
+│ DIGIKEY API  │  ┌─────────────────────────────────────────┐ │
+│ Client ID    │  │ Part Number  │ Status    │ ...           │ │
+│ [••••••••••] │  │ GRM188R61... │ Obsolete  │ ...           │ │
+│ Client Secret│  │ LQW18AN10... │ Active    │ ...           │ │
+│ [••••••••••] │  │ RC0402JR-... │ Not Found │ ...           │ │
+│⚡ Check DK   │  └─────────────────────────────────────────┘ │
+│ ─────────────│  SUBSTITUTES  (DigiKey / Mouser)              │
+│ MOUSER API   │  ┌─────────────────────────────────────────┐ │
+│ API Key      │  │ Mfr Part No │ DK/Mouser P/N │ Source    │ │
+│ [••••••••••] │  └─────────────────────────────────────────┘ │
+│⚡ Check MS   │                                               │
+│ ─────────────│                                     ⚙ 設定   │
+│ SUMMARY      │                                               │
+│ Added    [ 1]│                                               │
+│ Removed  [ 1]│                                               │
+│ Qty Δ    [ 1]│                                               │
+│ Mfr Δ    [ 1]│                                               │
+│ Obsolete [ 2]│                                               │
+│ NRND     [ 1]│                                               │
+│↓ Save Report │                                               │
+└───────────────┴──────────────────────────────────────────────┘
 ```
 
 ---
@@ -43,8 +48,9 @@ DigiKey API を使ったライフサイクルチェック（廃品・NRND 検出
 |---|---|
 | BOM 差分比較 | 追加・削除・Quantity変更・Manufacturer変更を自動検出 |
 | カラム名カスタマイズ | ⚙ 設定から任意のカラム名に変更可能（config.ini に保存） |
-| DigiKey ライフサイクル | Active / NRND / Obsolete を色分け表示 |
-| 代替品表示 | DigiKey Substitutions / RecommendedProducts を表示 |
+| DigiKey ライフサイクル | DigiKey API で Active / NRND / Obsolete を色分け表示 |
+| Mouser ライフサイクル | Mouser API で Active / NRND / Obsolete を色分け表示 |
+| 代替品表示 | DigiKey Substitutions / Mouser SuggestedReplacement をSource付きで表示 |
 | Excel レポート出力 | 差分・ライフサイクル結果をシート別に出力 |
 | Prepare ツール | 任意Excelから不要列を削除して old/new.xlsx として保存 |
 | CLI モード | `--cli` オプションで GUI なし実行可能 |
@@ -70,7 +76,7 @@ pip install -r requirements.txt
 
 # 3. 設定ファイルを作成
 cp config.ini.example config.ini
-# config.ini をエディタで開いて DigiKey APIキーを設定
+# config.ini をエディタで開いて APIキーを設定
 ```
 
 ---
@@ -86,9 +92,11 @@ python main.py --cli    # CLI モード
 
 **GUI の操作フロー：**
 
-1. OLD / NEW の Excel ファイルを選択
+1. **…** ボタンで OLD / NEW の Excel ファイルを選択（パスを直接入力することも可能）
 2. **▶ Compare** をクリックして差分を確認
-3. DigiKey APIキーを入力して **⚡ Check Lifecycle** をクリック（任意）
+3. ライフサイクルチェックを行う場合は、認証情報を入力して以下のいずれかをクリック：
+   - **⚡ Check DigiKey** — DigiKey API を使用（Client ID + Client Secret が必要）
+   - **⚡ Check Mouser** — Mouser Search API を使用（API Key が必要）
 4. **↓ Save Excel Report** でレポートを保存
 
 ### Prepare ツール（前処理）
@@ -153,6 +161,31 @@ export DIGIKEY_CLIENT_SECRET=your_client_secret
 
 ---
 
+## Mouser API の設定
+
+1. [Mouser API Hub](https://www.mouser.com/api-hub/) でアカウントを作成
+2. Developer Portal から **API Key** を発行
+3. `config.ini` に設定（または環境変数を使用）
+
+```ini
+[mouser]
+api_key = YOUR_MOUSER_API_KEY_HERE
+```
+
+**環境変数での設定（推奨）：**
+
+```bash
+# Windows
+set MOUSER_API_KEY=your_api_key
+
+# Mac / Linux
+export MOUSER_API_KEY=your_api_key
+```
+
+> **レート制限：** 30 リクエスト/分、1,000 リクエスト/日
+
+---
+
 ## ライフサイクルステータスの色
 
 | 色 | ステータス | 意味 |
@@ -160,25 +193,33 @@ export DIGIKEY_CLIENT_SECRET=your_client_secret
 | 🔴 赤 | Obsolete | 廃品（製造中止） |
 | 🟠 橙 | NRND | 新規設計非推奨 |
 | 🟢 緑 | Active | 現行品 |
-| ⬛ グレー | Unknown | DigiKey に未登録 |
+| ⬛ グレー | Not Found | API データベースに未登録 |
 
 ---
 
 ## サンプルデータ
 
-`sample_old.xlsx` と `sample_new.xlsx` に動作確認用のダミーデータが含まれています。  
-すぐに試したい場合は以下を実行してください。
+`sample_old.xlsx` と `sample_new.xlsx` に動作確認用のダミーデータが含まれています。
+
+GUI の **…** ボタンで直接選択するか、以下のようにコピーして使用してください。
 
 ```bash
+# macOS / Linux
 cp sample_old.xlsx old.xlsx
 cp sample_new.xlsx new.xlsx
-python main.py
+
+# Windows
+copy sample_old.xlsx old.xlsx
+copy sample_new.xlsx new.xlsx
 ```
+
+その後 `python main.py` を実行して **▶ Compare** をクリックしてください。
 
 サンプルデータに含まれる変更点：
 
 | 変更種別 | 部品 |
 |---|---|
+| 追加 | ERJ-1GEJ5R1C |
 | 追加 | RC0402JR-070R1L |
 | 削除 | MMBT3904LT1G |
 | Quantity 変更 | LQW18AN10NG00D（50 → 80） |
@@ -204,6 +245,7 @@ bom-diff-tool/
 │   ├── column_config.py     # カラム名設定の読み書き
 │   ├── comparator.py        # BOM比較ロジック
 │   ├── digikey_client.py    # DigiKey API クライアント
+│   ├── mouser_client.py     # Mouser API クライアント
 │   ├── gui.py               # メインGUI
 │   ├── loader.py            # Excel読み込み
 │   ├── preprocessor.py      # 前処理ロジック

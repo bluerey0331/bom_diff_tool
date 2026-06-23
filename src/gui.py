@@ -1,10 +1,10 @@
 """
-gui.py - BOM比較ツールのGUIモジュール（DigiKey API + カラム名設定対応）
+gui.py - BOM比較ツールのGUIモジュール（DigiKey / Mouser API + カラム名設定対応）
 
-v2.1 変更点:
-  - ヘッダーに ⚙ 設定ボタンを追加
-  - 設定変更後、タブのカラム名表示を自動更新
-  - loader / comparator / report のカラム名は column_config から動的取得
+v2.2 変更点:
+  - Mouser Search API 対応を追加
+  - 左パネルに MOUSER API セクションを追加
+  - Lifecycle タブの代替品テーブルに Source 列（DigiKey / Mouser）を追加
 """
 
 import tkinter as tk
@@ -26,6 +26,12 @@ try:
     DIGIKEY_AVAILABLE = True
 except ImportError:
     DIGIKEY_AVAILABLE = False
+
+try:
+    from src.mouser_client import MouserClient, load_api_key as mouser_load_api_key
+    MOUSER_AVAILABLE = True
+except ImportError:
+    MOUSER_AVAILABLE = False
 
 
 # ============================================================
@@ -75,7 +81,8 @@ class BomApp(tk.Tk):
         self.configure(bg=PALETTE["bg_dark"])
 
         self._results          = None
-        self._dk_results       = {}
+        self._dk_results       = {}   # DigiKey チェック結果
+        self._ms_results       = {}   # Mouser チェック結果
         self._new_part_numbers = []
 
         self._build_ui()
@@ -151,7 +158,7 @@ class BomApp(tk.Tk):
             command=self._open_settings
             ).pack(side="right", padx=16, pady=10)
 
-        tk.Label(header, text="v2.1  +  DigiKey API",
+        tk.Label(header, text="v2.2  +  DigiKey / Mouser API",
             bg=PALETTE["bg_panel"], fg=PALETTE["text_muted"],
             font=FONT_LABEL).pack(side="right", padx=4)
 
@@ -199,7 +206,7 @@ class BomApp(tk.Tk):
 
         tk.Frame(parent, bg=PALETTE["bg_dark"], height=8).pack()
 
-        self._dk_btn = tk.Button(parent, text="⚡  Check Lifecycle",
+        self._dk_btn = tk.Button(parent, text="⚡  Check  DigiKey",
             bg=PALETTE["bg_card"], fg=PALETTE["text_muted"],
             font=FONT_UI, relief="flat", cursor="hand2",
             pady=8, state="disabled", command=self._run_digikey_check)
@@ -208,6 +215,28 @@ class BomApp(tk.Tk):
         self._dk_progress = ttk.Progressbar(parent,
             style="BomTool.Horizontal.TProgressbar", mode="determinate")
         self._dk_progress.pack(fill="x", pady=(6, 0))
+
+        tk.Frame(parent, bg=PALETTE["border"], height=1).pack(fill="x", pady=16)
+
+        # ── MOUSER API ──
+        section_label("MOUSER API")
+
+        tk.Label(parent, text="API Key", bg=PALETTE["bg_dark"],
+            fg=PALETTE["text_muted"], font=FONT_SMALL, anchor="w").pack(fill="x")
+        self._ms_api_key = tk.StringVar()
+        self._build_entry(parent, self._ms_api_key, show="•")
+
+        tk.Frame(parent, bg=PALETTE["bg_dark"], height=8).pack()
+
+        self._ms_btn = tk.Button(parent, text="⚡  Check  Mouser",
+            bg=PALETTE["bg_card"], fg=PALETTE["text_muted"],
+            font=FONT_UI, relief="flat", cursor="hand2",
+            pady=8, state="disabled", command=self._run_mouser_check)
+        self._ms_btn.pack(fill="x")
+
+        self._ms_progress = ttk.Progressbar(parent,
+            style="BomTool.Horizontal.TProgressbar", mode="determinate")
+        self._ms_progress.pack(fill="x", pady=(6, 0))
 
         tk.Frame(parent, bg=PALETTE["border"], height=1).pack(fill="x", pady=16)
 
@@ -357,7 +386,7 @@ class BomApp(tk.Tk):
 
         tk.Frame(parent, bg=PALETTE["border"], height=1).pack(fill="x", pady=4)
 
-        tk.Label(parent, text="DIGIKEY SUBSTITUTES  (for selected part)",
+        tk.Label(parent, text="SUBSTITUTES  (for selected part)",
             bg=PALETTE["bg_panel"], fg=PALETTE["text_muted"],
             font=FONT_SMALL, anchor="w").pack(fill="x", padx=8, pady=(4, 2))
 
@@ -369,15 +398,23 @@ class BomApp(tk.Tk):
             style="Dark.Vertical.TScrollbar")
         vsb_sub.pack(side="right", fill="y")
 
-        sub_cols = ["Mfr Part Number", "DigiKey Part Number",
-                    "Manufacturer Name", "Description"]
+        sub_cols = ["Mfr Part Number", "DigiKey / Mouser P/N",
+                    "Manufacturer Name", "Description", "Source"]
         self._sub_tree = ttk.Treeview(sub_frame, columns=sub_cols,
             show="headings", style="Dark.Treeview", yscrollcommand=vsb_sub.set)
         vsb_sub.configure(command=self._sub_tree.yview)
         self._sub_tree.pack(fill="both", expand=True)
 
+        sub_widths = {
+            "Mfr Part Number":      150,
+            "DigiKey / Mouser P/N": 150,
+            "Manufacturer Name":    140,
+            "Description":          220,
+            "Source":                80,
+        }
         for col in sub_cols:
-            self._sub_tree.column(col, width=160, minwidth=60, anchor="w")
+            self._sub_tree.column(col, width=sub_widths.get(col, 120),
+                minwidth=50, anchor="w")
             self._sub_tree.heading(col, text=col, anchor="w")
 
         self._sub_tree.tag_configure("sub_row", background=PALETTE["bg_card"])
@@ -492,6 +529,7 @@ class BomApp(tk.Tk):
         self._results          = results
         self._new_part_numbers = new_pns
         self._dk_results       = {}
+        self._ms_results       = {}
 
         cols = get_column_names()
         mfr  = cols["manufacturer"]
@@ -515,13 +553,14 @@ class BomApp(tk.Tk):
         self._progress.stop()
         self._run_btn.config(state="normal", text="▶  Compare")
         self._dk_btn.config(state="normal", fg=PALETTE["accent"])
+        self._ms_btn.config(state="normal", fg=PALETTE["accent"])
         self._save_btn.config(state="normal", fg=PALETTE["accent"])
 
         total = (len(results["added"]) + len(results["removed"])
                  + len(results["qty_changed"]) + len(results["mfr_changed"]))
         self._set_status(
             f"Done  —  {total} difference(s)  ·  {len(new_pns)} parts in new BOM  ·  "
-            "Click ⚡ Check Lifecycle to query DigiKey")
+            "Click ⚡ Check DigiKey or ⚡ Check Mouser")
 
     def _on_comparison_error(self, error_msg: str):
         self._progress.stop()
@@ -585,21 +624,88 @@ class BomApp(tk.Tk):
 
     def _on_dk_done(self, results: dict):
         self._dk_results = results
-        self._populate_lifecycle_tab(results)
+        self._populate_lifecycle_tab({**self._ms_results, **results})
 
         obsolete_n = sum(1 for r in results.values() if r.get("lifecycle") == LIFECYCLE_OBSOLETE)
         nrnd_n     = sum(1 for r in results.values() if r.get("lifecycle") == LIFECYCLE_NRND)
 
         self._summary_cards["obsolete"].config(text=str(obsolete_n))
         self._summary_cards["nrnd"].config(text=str(nrnd_n))
-        self._dk_btn.config(state="normal", text="⚡  Check Lifecycle")
+        self._dk_btn.config(state="normal", text="⚡  Check  DigiKey")
         self._set_status(f"DigiKey check done  —  Obsolete: {obsolete_n}  NRND: {nrnd_n}")
         self._notebook.select(4)
 
     def _on_dk_error(self, error_msg: str):
-        self._dk_btn.config(state="normal", text="⚡  Check Lifecycle")
+        self._dk_btn.config(state="normal", text="⚡  Check  DigiKey")
         self._set_status(f"DigiKey Error: {error_msg}")
         messagebox.showerror("DigiKey APIエラー", error_msg)
+
+    # ----------------------------------------------------------
+    # Mouser ライフサイクルチェック
+    # ----------------------------------------------------------
+
+    def _run_mouser_check(self):
+        """Mouser API によるライフサイクルチェックを開始する"""
+        if not self._new_part_numbers:
+            messagebox.showwarning("No Data", "先に Compare を実行してください。")
+            return
+        if not MOUSER_AVAILABLE:
+            messagebox.showerror("Module Error",
+                "requests ライブラリが見つかりません。\npip install requests を実行してください。")
+            return
+
+        self._ms_btn.config(state="disabled", text="Checking…")
+        self._ms_progress.config(value=0, maximum=len(self._new_part_numbers))
+        self._set_status(f"Mouser API: 0 / {len(self._new_part_numbers)} parts…")
+
+        threading.Thread(
+            target=self._mouser_worker,
+            args=(self._ms_api_key.get().strip(),),
+            daemon=True).start()
+
+    def _mouser_worker(self, api_key: str):
+        """バックグラウンドで Mouser API を順次呼び出すワーカー"""
+        try:
+            if api_key:
+                client = MouserClient(api_key)
+            else:
+                client = MouserClient(mouser_load_api_key())
+        except ValueError as e:
+            self.after(0, self._on_ms_error, str(e))
+            return
+
+        results = {}
+        total   = len(self._new_part_numbers)
+        for i, pn in enumerate(self._new_part_numbers):
+            lc = client.check_lifecycle(pn)
+            results[pn] = lc
+            self.after(0, self._on_ms_progress, i + 1, total, pn, lc)
+        self.after(0, self._on_ms_done, results)
+
+    def _on_ms_progress(self, done: int, total: int, pn: str, lc: dict):
+        self._ms_progress.config(value=done)
+        self._set_status(
+            f"Mouser API: {done} / {total}  —  {pn} → {lc.get('status_label','?')}")
+
+    def _on_ms_done(self, results: dict):
+        self._ms_results = results
+        # DigiKey結果とマージして表示（DigiKeyが優先）
+        merged = {**results, **self._dk_results}
+        self._populate_lifecycle_tab(merged)
+
+        obsolete_n = sum(1 for r in results.values() if r.get("lifecycle") == LIFECYCLE_OBSOLETE)
+        nrnd_n     = sum(1 for r in results.values() if r.get("lifecycle") == LIFECYCLE_NRND)
+
+        self._summary_cards["obsolete"].config(text=str(obsolete_n))
+        self._summary_cards["nrnd"].config(text=str(nrnd_n))
+        self._ms_btn.config(state="normal", text="⚡  Check  Mouser")
+        self._set_status(f"Mouser check done  —  Obsolete: {obsolete_n}  NRND: {nrnd_n}")
+        self._notebook.select(4)
+
+    def _on_ms_error(self, error_msg: str):
+        self._ms_btn.config(state="normal", text="⚡  Check  Mouser")
+        self._set_status(f"Mouser Error: {error_msg}")
+        messagebox.showerror("Mouser APIエラー", error_msg)
 
     def _clear_lifecycle_tab(self):
         for item in self._lc_tree.get_children():
@@ -633,27 +739,40 @@ class BomApp(tk.Tk):
                 iid=pn, tags=(lifecycle,))
 
     def _on_lifecycle_select(self, event):
+        """行選択時に DigiKey / Mouser 両方の代替品テーブルを更新する"""
         selection = self._lc_tree.selection()
         if not selection:
             return
 
-        pn          = selection[0]
-        substitutes = self._dk_results.get(pn, {}).get("substitutes", [])
+        pn = selection[0]
+
+        # DigiKey と Mouser の代替品を両方収集して Source を付与
+        all_subs = []
+        dk_lc = self._dk_results.get(pn, {})
+        for sub in dk_lc.get("substitutes", []):
+            all_subs.append({**sub, "source": "DigiKey"})
+
+        ms_lc = self._ms_results.get(pn, {})
+        for sub in ms_lc.get("substitutes", []):
+            all_subs.append({**sub, "source": "Mouser"})
 
         for item in self._sub_tree.get_children():
             self._sub_tree.delete(item)
 
-        if not substitutes:
+        if not all_subs:
             self._sub_tree.insert("", "end",
-                values=["（代替品なし）", "", "", ""], tags=("sub_row",))
+                values=["（代替品なし）", "", "", "", ""], tags=("sub_row",))
             return
 
-        for i, sub in enumerate(substitutes):
+        for i, sub in enumerate(all_subs):
+            # DigiKey品番 または Mouser品番（どちらかに入る）
+            dist_pn = sub.get("digikey_part_number", "") or sub.get("mouser_part_number", "")
             self._sub_tree.insert("", "end", values=[
-                sub.get("mfr_part_number",     ""),
-                sub.get("digikey_part_number", ""),
-                sub.get("manufacturer",         ""),
-                sub.get("description",          ""),
+                sub.get("mfr_part_number", ""),
+                dist_pn,
+                sub.get("manufacturer",   ""),
+                sub.get("description",    ""),
+                sub.get("source",         ""),
             ], tags=("sub_row" if i % 2 == 0 else "sub_alt",))
 
     # ----------------------------------------------------------

@@ -23,6 +23,12 @@
 client_id     = YOUR_CLIENT_ID_HERE
 client_secret = YOUR_CLIENT_SECRET_HERE
 
+; ── Mouser Search API 認証情報 ──
+; Mouser API Hub から申請: https://www.mouser.com/api-hub/
+; 環境変数: MOUSER_API_KEY
+[mouser]
+api_key = YOUR_MOUSER_API_KEY_HERE
+
 ; ── BOM カラム名設定（GUIの ⚙ 設定 から変更可能） ──
 ; 入力Excelファイルのカラムヘッダー名に合わせて変更してください。
 [columns]

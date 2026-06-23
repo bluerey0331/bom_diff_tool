@@ -27,6 +27,11 @@ PRODUCT_DETAILS_URL    = "https://api.digikey.com/products/v4/search/{pn}/produc
 SUBSTITUTIONS_URL      = "https://api.digikey.com/products/v4/search/{pn}/substitutions"
 RECOMMENDED_URL        = "https://api.digikey.com/products/v4/search/{pn}/recommendedproducts"
 
+# ロケールデフォルト値（config.ini の [digikey] セクションで上書き可能）
+DEFAULT_LOCALE_SITE     = "US"
+DEFAULT_LOCALE_LANGUAGE = "en"
+DEFAULT_LOCALE_CURRENCY = "USD"
+
 # ライフサイクルステータスの分類セット
 OBSOLETE_STATUSES = {"Obsolete", "Discontinued"}
 NRND_STATUSES     = {"Not Recommended for New Designs", "NRND", "Last Time Buy"}
@@ -48,6 +53,16 @@ MAX_RECOMMENDED   = 10
 # 認証情報の読み込み
 # ============================================================
 
+_CONFIG_PLACEHOLDER_PREFIX = "YOUR_"
+
+
+def _load_config() -> configparser.ConfigParser:
+    config = configparser.ConfigParser()
+    config_path = os.path.join(os.path.dirname(__file__), "..", "config.ini")
+    config.read(config_path, encoding="utf-8")
+    return config
+
+
 def load_credentials() -> tuple[str, str]:
     """
     DigiKey API のクライアントIDとシークレットを取得する。
@@ -60,27 +75,52 @@ def load_credentials() -> tuple[str, str]:
         tuple[str, str]: (client_id, client_secret)
 
     Raises:
-        ValueError: 認証情報が見つからない場合
+        ValueError: 認証情報が見つからない場合、またはプレースホルダーのまま
     """
     client_id     = os.environ.get("DIGIKEY_CLIENT_ID", "")
     client_secret = os.environ.get("DIGIKEY_CLIENT_SECRET", "")
     if client_id and client_secret:
         return client_id, client_secret
 
-    config = configparser.ConfigParser()
-    config_path = os.path.join(os.path.dirname(__file__), "..", "config.ini")
-    config.read(config_path, encoding="utf-8")
+    config = _load_config()
     if config.has_section("digikey"):
         client_id     = config.get("digikey", "client_id",     fallback="")
         client_secret = config.get("digikey", "client_secret", fallback="")
-    if client_id and client_secret:
-        return client_id, client_secret
 
-    raise ValueError(
-        "DigiKey APIの認証情報が見つかりません。\n"
-        "環境変数 DIGIKEY_CLIENT_ID / DIGIKEY_CLIENT_SECRET を設定するか、\n"
-        "config.ini に [digikey] セクションを追加してください。"
-    )
+    if not client_id or not client_secret:
+        raise ValueError(
+            "DigiKey APIの認証情報が見つかりません。\n"
+            "環境変数 DIGIKEY_CLIENT_ID / DIGIKEY_CLIENT_SECRET を設定するか、\n"
+            "config.ini に [digikey] セクションを追加してください。"
+        )
+
+    if client_id.startswith(_CONFIG_PLACEHOLDER_PREFIX) or \
+       client_secret.startswith(_CONFIG_PLACEHOLDER_PREFIX):
+        raise ValueError(
+            "config.ini の認証情報がプレースホルダーのままです。\n"
+            "DigiKey Developer Portal (https://developer.digikey.com) で\n"
+            "アプリを作成し、client_id と client_secret を設定してください。"
+        )
+
+    return client_id, client_secret
+
+
+def load_locale_config() -> tuple[str, str, str]:
+    """
+    config.ini からロケール設定を読み込む。
+    設定がない場合はデフォルト値（US / en / USD）を返す。
+
+    Returns:
+        tuple[str, str, str]: (locale_site, locale_language, locale_currency)
+    """
+    config = _load_config()
+    if not config.has_section("digikey"):
+        return DEFAULT_LOCALE_SITE, DEFAULT_LOCALE_LANGUAGE, DEFAULT_LOCALE_CURRENCY
+
+    site     = config.get("digikey", "locale_site",     fallback=DEFAULT_LOCALE_SITE)
+    language = config.get("digikey", "locale_language", fallback=DEFAULT_LOCALE_LANGUAGE)
+    currency = config.get("digikey", "locale_currency", fallback=DEFAULT_LOCALE_CURRENCY)
+    return site, language, currency
 
 
 # ============================================================
@@ -90,11 +130,21 @@ def load_credentials() -> tuple[str, str]:
 class DigiKeyClient:
     """DigiKey Product Information API v4 クライアント"""
 
-    def __init__(self, client_id: str, client_secret: str):
-        self._client_id     = client_id
-        self._client_secret = client_secret
-        self._access_token  = ""
-        self._token_expires = 0.0
+    def __init__(
+        self,
+        client_id: str,
+        client_secret: str,
+        locale_site: str     = DEFAULT_LOCALE_SITE,
+        locale_language: str = DEFAULT_LOCALE_LANGUAGE,
+        locale_currency: str = DEFAULT_LOCALE_CURRENCY,
+    ):
+        self._client_id       = client_id
+        self._client_secret   = client_secret
+        self._access_token    = ""
+        self._token_expires   = 0.0
+        self._locale_site     = locale_site
+        self._locale_language = locale_language
+        self._locale_currency = locale_currency
 
     # ----------------------------------------------------------
     # OAuth2 トークン管理
@@ -117,9 +167,12 @@ class DigiKeyClient:
     def _headers(self) -> dict:
         self._ensure_token()
         return {
-            "Authorization":      f"Bearer {self._access_token}",
-            "X-DIGIKEY-Client-Id": self._client_id,
-            "Content-Type":       "application/json",
+            "Authorization":             f"Bearer {self._access_token}",
+            "X-DIGIKEY-Client-Id":       self._client_id,
+            "X-DIGIKEY-Locale-Site":     self._locale_site,
+            "X-DIGIKEY-Locale-Language": self._locale_language,
+            "X-DIGIKEY-Locale-Currency": self._locale_currency,
+            "Content-Type":              "application/json",
         }
 
     # ----------------------------------------------------------
@@ -388,6 +441,12 @@ def _merge_candidates(
 # ============================================================
 
 def create_client() -> "DigiKeyClient":
-    """認証情報を自動読み込みして DigiKeyClient を生成する"""
+    """認証情報とロケール設定を自動読み込みして DigiKeyClient を生成する"""
     client_id, client_secret = load_credentials()
-    return DigiKeyClient(client_id, client_secret)
+    locale_site, locale_language, locale_currency = load_locale_config()
+    return DigiKeyClient(
+        client_id, client_secret,
+        locale_site=locale_site,
+        locale_language=locale_language,
+        locale_currency=locale_currency,
+    )

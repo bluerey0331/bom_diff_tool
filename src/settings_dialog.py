@@ -106,6 +106,8 @@ class SettingsDialog(tk.Toplevel):
             lambda e: canvas.itemconfig(win, width=e.width))
         canvas.bind_all("<MouseWheel>",
             lambda e: canvas.yview_scroll(-1 * (e.delta // 120), "units"))
+        self.bind("<Destroy>",
+            lambda e: canvas.unbind_all("<MouseWheel>") if e.widget is self else None)
 
         # ── セクション1: BOM カラム名 ──
         self._build_section(
