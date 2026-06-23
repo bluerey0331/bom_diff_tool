@@ -1,10 +1,12 @@
 """
 gui.py - BOM比較ツールのGUIモジュール（DigiKey / Mouser API + カラム名設定対応）
 
-v2.2 変更点:
-  - Mouser Search API 対応を追加
-  - 左パネルに MOUSER API セクションを追加
-  - Lifecycle タブの代替品テーブルに Source 列（DigiKey / Mouser）を追加
+v3.0 変更点:
+  - UIをフルリデザイン（モダンダークテーマ、ヴァイオレットアクセント）
+  - 角丸 Compare ボタン（Canvas ベース）
+  - ホバーエフェクトをすべてのボタンに追加
+  - サマリーを大数字バッジ型に変更
+  - セクションをカード枠でグルーピング
 """
 
 import tkinter as tk
@@ -35,40 +37,158 @@ except ImportError:
 
 
 # ============================================================
-# カラーパレット
+# カラーパレット（v3.0 モダンリデザイン）
 # ============================================================
 PALETTE = {
-    "bg_dark":      "#0D1117",
-    "bg_panel":     "#161B22",
-    "bg_card":      "#1C2333",
-    "border":       "#30363D",
-    "accent":       "#58A6FF",
-    "accent_dim":   "#1F4788",
-    "text":         "#E6EDF3",
-    "text_muted":   "#8B949E",
-    "added":        "#238636",
-    "added_bg":     "#0D2818",
-    "removed":      "#DA3633",
-    "removed_bg":   "#2D0F0F",
-    "changed":      "#D29922",
-    "changed_bg":   "#2D2006",
+    # ── 背景 ──
+    "bg_dark":      "#0C0E17",
+    "bg_panel":     "#13161F",
+    "bg_card":      "#1C2030",
+    "bg_hover":     "#252A3E",
+
+    # ── ボーダー ──
+    "border":       "#2A2F47",
+    "border2":      "#3A4060",
+
+    # ── アクセント（ヴァイオレット） ──
+    "accent":       "#7C3AED",
+    "accent_hover": "#8B5CF6",
+    "accent_dim":   "#2D1F5E",
+    "accent_light": "#C4B5FD",
+
+    # ── テキスト ──
+    "text":         "#EEF0FB",
+    "text_muted":   "#6B7080",
     "mono":         "#C9D1D9",
-    "obsolete":     "#FF4444",
-    "obsolete_bg":  "#3D0000",
-    "nrnd":         "#FF8C00",
-    "nrnd_bg":      "#3D2000",
-    "active":       "#3FB950",
-    "active_bg":    "#0D2818",
-    "unknown_bg":   "#1C2333",
+
+    # ── 差分ステータス ──
+    "added":        "#10B981",
+    "added_bg":     "#052E1D",
+    "removed":      "#EF4444",
+    "removed_bg":   "#2D0A0A",
+    "changed":      "#F59E0B",
+    "changed_bg":   "#2D1A00",
+
+    # ── ライフサイクル ──
+    "obsolete":     "#FCA5A5",
+    "obsolete_bg":  "#4C0519",
+    "nrnd":         "#FCD34D",
+    "nrnd_bg":      "#422006",
+    "active":       "#6EE7B7",
+    "active_bg":    "#052E1D",
+    "unknown_bg":   "#1C2030",
 }
 
 FONT_UI    = ("Segoe UI", 10)
 FONT_LABEL = ("Segoe UI", 9)
 FONT_MONO  = ("Consolas", 10)
-FONT_TITLE = ("Segoe UI", 13, "bold")
+FONT_TITLE = ("Segoe UI", 14, "bold")
 FONT_HEAD  = ("Segoe UI", 10, "bold")
 FONT_SMALL = ("Segoe UI", 8)
+FONT_CAP   = ("Segoe UI", 7)
+FONT_NUM   = ("Segoe UI", 20, "bold")
 
+
+# ============================================================
+# ヘルパー
+# ============================================================
+
+def _bind_hover(widget, normal_bg, hover_bg, normal_fg=None, hover_fg=None):
+    """tk.Button / Label にホバーエフェクトを付与する"""
+    def on_enter(_):
+        kw = {"bg": hover_bg}
+        if hover_fg:
+            kw["fg"] = hover_fg
+        widget.config(**kw)
+    def on_leave(_):
+        kw = {"bg": normal_bg}
+        if normal_fg:
+            kw["fg"] = normal_fg
+        widget.config(**kw)
+    widget.bind("<Enter>", on_enter)
+    widget.bind("<Leave>", on_leave)
+
+
+class RoundedButton(tk.Canvas):
+    """Canvas ベースの角丸ボタン（ホバー対応）"""
+
+    def __init__(self, parent, text, command,
+                 bg, fg, hover_bg, disabled_bg=None,
+                 radius=10, font=None, height=44, **kw):
+        super().__init__(parent, height=height, bd=0,
+                         highlightthickness=0,
+                         bg=parent.cget("bg"), **kw)
+        self._bg         = bg
+        self._hover_bg   = hover_bg
+        self._disabled_bg = disabled_bg or PALETTE["bg_card"]
+        self._fg         = fg
+        self._text       = text
+        self._command    = command
+        self._radius     = radius
+        self._font       = font or ("Segoe UI", 11, "bold")
+        self._disabled   = False
+        self._current_bg = bg
+
+        self.bind("<Configure>", lambda _: self._draw(self._current_bg))
+        self.bind("<Button-1>",  self._on_click)
+        self.bind("<Enter>",     self._on_enter)
+        self.bind("<Leave>",     self._on_leave)
+
+    def _rounded_rect(self, x1, y1, x2, y2, r, color):
+        self.create_arc(x1, y1, x1+2*r, y1+2*r, start=90,  extent=90,  fill=color, outline=color)
+        self.create_arc(x2-2*r, y1, x2, y1+2*r, start=0,   extent=90,  fill=color, outline=color)
+        self.create_arc(x1, y2-2*r, x1+2*r, y2, start=180, extent=90,  fill=color, outline=color)
+        self.create_arc(x2-2*r, y2-2*r, x2, y2, start=270, extent=90,  fill=color, outline=color)
+        self.create_rectangle(x1+r, y1, x2-r, y2, fill=color, outline=color)
+        self.create_rectangle(x1, y1+r, x2, y2-r, fill=color, outline=color)
+
+    def _draw(self, bg=None):
+        self.delete("all")
+        w, h = self.winfo_width(), self.winfo_height()
+        if w < 4 or h < 4:
+            return
+        color = bg if bg else self._bg
+        self._rounded_rect(0, 0, w, h, self._radius, color)
+        fg = PALETTE["text_muted"] if self._disabled else self._fg
+        self.create_text(w // 2, h // 2, text=self._text,
+                         fill=fg, font=self._font, anchor="center")
+
+    def _on_click(self, _):
+        if not self._disabled and self._command:
+            self._command()
+
+    def _on_enter(self, _):
+        if not self._disabled:
+            self._current_bg = self._hover_bg
+            self._draw(self._hover_bg)
+
+    def _on_leave(self, _):
+        if not self._disabled:
+            self._current_bg = self._bg
+            self._draw(self._bg)
+
+    def config(self, **kw):
+        if "text" in kw:
+            self._text = kw.pop("text")
+        if "state" in kw:
+            st = kw.pop("state")
+            self._disabled = (st == "disabled")
+            self._current_bg = self._disabled_bg if self._disabled else self._bg
+        if "fg" in kw:
+            self._fg = kw.pop("fg")
+        self.after_idle(lambda: self._draw(self._current_bg))
+
+    configure = config
+
+    def cget(self, key):
+        if key == "state":
+            return "disabled" if self._disabled else "normal"
+        return super().cget(key)
+
+
+# ============================================================
+# メインウィンドウ
+# ============================================================
 
 class BomApp(tk.Tk):
     """BOM比較ツールのメインウィンドウ"""
@@ -76,13 +196,13 @@ class BomApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("BOM Diff Tool")
-        self.geometry("1280x820")
+        self.geometry("1300x840")
         self.minsize(900, 600)
         self.configure(bg=PALETTE["bg_dark"])
 
         self._results          = None
-        self._dk_results       = {}   # DigiKey チェック結果
-        self._ms_results       = {}   # Mouser チェック結果
+        self._dk_results       = {}
+        self._ms_results       = {}
         self._new_part_numbers = []
 
         self._build_ui()
@@ -96,10 +216,10 @@ class BomApp(tk.Tk):
         self._build_header()
 
         body = tk.Frame(self, bg=PALETTE["bg_dark"])
-        body.pack(fill="both", expand=True, padx=16, pady=(0, 16))
+        body.pack(fill="both", expand=True, padx=16, pady=(12, 12))
 
-        left = tk.Frame(body, bg=PALETTE["bg_dark"], width=290)
-        left.pack(side="left", fill="y", padx=(0, 12))
+        left = tk.Frame(body, bg=PALETTE["bg_dark"], width=300)
+        left.pack(side="left", fill="y", padx=(0, 14))
         left.pack_propagate(False)
         self._build_left_panel(left)
 
@@ -114,197 +234,275 @@ class BomApp(tk.Tk):
         style.theme_use("clam")
 
         style.configure("Dark.TNotebook",
-            background=PALETTE["bg_dark"], borderwidth=0)
+            background=PALETTE["bg_dark"], borderwidth=0, tabmargins=0)
         style.configure("Dark.TNotebook.Tab",
-            background=PALETTE["bg_card"], foreground=PALETTE["text_muted"],
-            padding=[14, 6], font=FONT_LABEL, borderwidth=0)
+            background=PALETTE["bg_dark"], foreground=PALETTE["text_muted"],
+            padding=[16, 8], font=FONT_LABEL, borderwidth=0)
         style.map("Dark.TNotebook.Tab",
-            background=[("selected", PALETTE["bg_panel"])],
+            background=[("selected", PALETTE["bg_dark"])],
             foreground=[("selected", PALETTE["text"])])
 
         style.configure("Dark.Treeview",
             background=PALETTE["bg_panel"], foreground=PALETTE["text"],
-            fieldbackground=PALETTE["bg_panel"], rowheight=28,
+            fieldbackground=PALETTE["bg_panel"], rowheight=30,
             font=FONT_MONO, borderwidth=0)
         style.configure("Dark.Treeview.Heading",
             background=PALETTE["bg_card"], foreground=PALETTE["text_muted"],
-            font=FONT_HEAD, relief="flat")
+            font=FONT_HEAD, relief="flat", borderwidth=0)
         style.map("Dark.Treeview",
             background=[("selected", PALETTE["accent_dim"])],
-            foreground=[("selected", PALETTE["text"])])
+            foreground=[("selected", PALETTE["accent_light"])])
 
         style.configure("Dark.Vertical.TScrollbar",
             background=PALETTE["bg_card"], troughcolor=PALETTE["bg_dark"],
-            arrowcolor=PALETTE["text_muted"], borderwidth=0)
+            arrowcolor=PALETTE["border2"], borderwidth=0, relief="flat")
 
-        style.configure("BomTool.Horizontal.TProgressbar",
+        style.configure("Accent.Horizontal.TProgressbar",
             troughcolor=PALETTE["bg_card"], background=PALETTE["accent"],
-            borderwidth=0)
+            borderwidth=0, relief="flat")
 
     def _build_header(self):
-        header = tk.Frame(self, bg=PALETTE["bg_panel"], height=56)
+        header = tk.Frame(self, bg=PALETTE["bg_panel"], height=58)
         header.pack(fill="x")
         header.pack_propagate(False)
 
-        tk.Label(header, text="⬡  BOM Diff Tool",
-            bg=PALETTE["bg_panel"], fg=PALETTE["text"],
-            font=FONT_TITLE).pack(side="left", padx=20, pady=14)
+        # アイコン＋タイトル
+        left = tk.Frame(header, bg=PALETTE["bg_panel"])
+        left.pack(side="left", padx=20, pady=10)
+        tk.Label(left, text="◈", bg=PALETTE["bg_panel"], fg=PALETTE["accent"],
+                 font=("Segoe UI", 17)).pack(side="left", padx=(0, 8))
+        tk.Label(left, text="BOM Diff Tool", bg=PALETTE["bg_panel"], fg=PALETTE["text"],
+                 font=FONT_TITLE).pack(side="left")
 
-        # ── ⚙ 設定ボタン（右端） ──
-        tk.Button(header, text="⚙  設定",
+        # 右側: API バッジ + 設定ボタン
+        right = tk.Frame(header, bg=PALETTE["bg_panel"])
+        right.pack(side="right", padx=16)
+
+        settings_btn = tk.Button(right, text="⚙  Settings",
             bg=PALETTE["bg_card"], fg=PALETTE["text_muted"],
             font=FONT_UI, relief="flat", cursor="hand2",
-            padx=12, pady=6,
-            command=self._open_settings
-            ).pack(side="right", padx=16, pady=10)
+            padx=12, pady=5, bd=0,
+            command=self._open_settings)
+        settings_btn.pack(side="right", padx=(8, 0))
+        _bind_hover(settings_btn, PALETTE["bg_card"], PALETTE["bg_hover"],
+                    PALETTE["text_muted"], PALETTE["text"])
 
-        tk.Label(header, text="v2.2  +  DigiKey / Mouser API",
-            bg=PALETTE["bg_panel"], fg=PALETTE["text_muted"],
-            font=FONT_LABEL).pack(side="right", padx=4)
+        for label, color in [("Mouser", "#60A5FA"), ("DigiKey", "#F59E0B")]:
+            badge = tk.Label(right, text=label,
+                             bg=PALETTE["bg_card"], fg=color,
+                             font=FONT_CAP, padx=8, pady=4)
+            badge.pack(side="right", padx=3)
 
-        tk.Frame(self, bg=PALETTE["border"], height=1).pack(fill="x")
+        tk.Label(right, text="v2.2", bg=PALETTE["bg_panel"],
+                 fg=PALETTE["text_muted"], font=FONT_LABEL).pack(side="right", padx=8)
+
+        # アクセントライン
+        tk.Frame(self, bg=PALETTE["accent"], height=2).pack(fill="x")
+
+    # ----------------------------------------------------------
+    # 左パネル
+    # ----------------------------------------------------------
 
     def _build_left_panel(self, parent):
+        # ── BOM FILES カード ──
+        self._build_card_header(parent, "BOM FILES")
+        file_card = tk.Frame(parent, bg=PALETTE["bg_card"],
+                             highlightbackground=PALETTE["border"],
+                             highlightthickness=1)
+        file_card.pack(fill="x", pady=(4, 0))
 
-        def section_label(text):
-            tk.Label(parent, text=text, bg=PALETTE["bg_dark"],
-                fg=PALETTE["text_muted"], font=FONT_SMALL,
-                anchor="w").pack(fill="x", pady=(16, 4))
-
-        section_label("OLD BOM FILE")
+        tk.Label(file_card, text="OLD BOM", bg=PALETTE["bg_card"],
+                 fg=PALETTE["text_muted"], font=FONT_CAP,
+                 anchor="w").pack(fill="x", padx=10, pady=(8, 2))
         self._old_path = tk.StringVar(value="old.xlsx")
-        self._build_file_row(parent, self._old_path)
+        self._build_file_row(file_card, self._old_path)
 
-        section_label("NEW BOM FILE")
+        tk.Frame(file_card, bg=PALETTE["border"], height=1).pack(fill="x", padx=8)
+
+        tk.Label(file_card, text="NEW BOM", bg=PALETTE["bg_card"],
+                 fg=PALETTE["text_muted"], font=FONT_CAP,
+                 anchor="w").pack(fill="x", padx=10, pady=(8, 2))
         self._new_path = tk.StringVar(value="new.xlsx")
-        self._build_file_row(parent, self._new_path)
+        self._build_file_row(file_card, self._new_path)
+        tk.Frame(file_card, bg=PALETTE["bg_card"], height=4).pack()
 
-        tk.Frame(parent, bg=PALETTE["bg_dark"], height=12).pack()
-        self._run_btn = tk.Button(parent, text="▶  Compare",
-            bg=PALETTE["accent"], fg="#0D1117",
-            font=("Segoe UI", 11, "bold"), relief="flat",
-            cursor="hand2", pady=10, command=self._run_comparison)
+        # ── Compare ボタン ──
+        tk.Frame(parent, bg=PALETTE["bg_dark"], height=10).pack()
+        self._run_btn = RoundedButton(
+            parent, text="▶  Compare", command=self._run_comparison,
+            bg=PALETTE["accent"], fg="#FFFFFF",
+            hover_bg=PALETTE["accent_hover"],
+            disabled_bg=PALETTE["bg_card"],
+            radius=10, height=44,
+            font=("Segoe UI", 11, "bold"))
         self._run_btn.pack(fill="x")
 
         self._progress = ttk.Progressbar(parent,
-            style="BomTool.Horizontal.TProgressbar", mode="indeterminate")
-        self._progress.pack(fill="x", pady=(8, 0))
+            style="Accent.Horizontal.TProgressbar", mode="indeterminate")
+        self._progress.pack(fill="x", pady=(6, 0))
 
-        tk.Frame(parent, bg=PALETTE["border"], height=1).pack(fill="x", pady=16)
+        # ── DIGIKEY API カード ──
+        tk.Frame(parent, bg=PALETTE["bg_dark"], height=14).pack()
+        self._build_card_header(parent, "DIGIKEY API")
+        dk_card = tk.Frame(parent, bg=PALETTE["bg_card"],
+                           highlightbackground=PALETTE["border"],
+                           highlightthickness=1)
+        dk_card.pack(fill="x", pady=(4, 0))
 
-        section_label("DIGIKEY API")
-
-        tk.Label(parent, text="Client ID", bg=PALETTE["bg_dark"],
-            fg=PALETTE["text_muted"], font=FONT_SMALL, anchor="w").pack(fill="x")
+        tk.Label(dk_card, text="Client ID", bg=PALETTE["bg_card"],
+                 fg=PALETTE["text_muted"], font=FONT_CAP,
+                 anchor="w").pack(fill="x", padx=10, pady=(8, 2))
         self._dk_client_id = tk.StringVar()
-        self._build_entry(parent, self._dk_client_id, show="")
+        self._build_entry(dk_card, self._dk_client_id, show="")
 
-        tk.Label(parent, text="Client Secret", bg=PALETTE["bg_dark"],
-            fg=PALETTE["text_muted"], font=FONT_SMALL, anchor="w").pack(fill="x", pady=(6, 0))
+        tk.Label(dk_card, text="Client Secret", bg=PALETTE["bg_card"],
+                 fg=PALETTE["text_muted"], font=FONT_CAP,
+                 anchor="w").pack(fill="x", padx=10, pady=(6, 2))
         self._dk_client_secret = tk.StringVar()
-        self._build_entry(parent, self._dk_client_secret, show="•")
+        self._build_entry(dk_card, self._dk_client_secret, show="•")
+        tk.Frame(dk_card, bg=PALETTE["bg_card"], height=8).pack()
 
-        tk.Frame(parent, bg=PALETTE["bg_dark"], height=8).pack()
-
-        self._dk_btn = tk.Button(parent, text="⚡  Check  DigiKey",
-            bg=PALETTE["bg_card"], fg=PALETTE["text_muted"],
+        self._dk_btn = tk.Button(dk_card, text="⚡  Check DigiKey",
+            bg=PALETTE["bg_hover"], fg=PALETTE["text_muted"],
             font=FONT_UI, relief="flat", cursor="hand2",
-            pady=8, state="disabled", command=self._run_digikey_check)
-        self._dk_btn.pack(fill="x")
+            pady=7, state="disabled", bd=0,
+            command=self._run_digikey_check)
+        self._dk_btn.pack(fill="x", padx=8, pady=(0, 6))
 
-        self._dk_progress = ttk.Progressbar(parent,
-            style="BomTool.Horizontal.TProgressbar", mode="determinate")
-        self._dk_progress.pack(fill="x", pady=(6, 0))
+        self._dk_progress = ttk.Progressbar(dk_card,
+            style="Accent.Horizontal.TProgressbar", mode="determinate")
+        self._dk_progress.pack(fill="x", padx=8, pady=(0, 8))
 
-        tk.Frame(parent, bg=PALETTE["border"], height=1).pack(fill="x", pady=16)
+        # ── MOUSER API カード ──
+        tk.Frame(parent, bg=PALETTE["bg_dark"], height=14).pack()
+        self._build_card_header(parent, "MOUSER API")
+        ms_card = tk.Frame(parent, bg=PALETTE["bg_card"],
+                           highlightbackground=PALETTE["border"],
+                           highlightthickness=1)
+        ms_card.pack(fill="x", pady=(4, 0))
 
-        # ── MOUSER API ──
-        section_label("MOUSER API")
-
-        tk.Label(parent, text="API Key", bg=PALETTE["bg_dark"],
-            fg=PALETTE["text_muted"], font=FONT_SMALL, anchor="w").pack(fill="x")
+        tk.Label(ms_card, text="API Key", bg=PALETTE["bg_card"],
+                 fg=PALETTE["text_muted"], font=FONT_CAP,
+                 anchor="w").pack(fill="x", padx=10, pady=(8, 2))
         self._ms_api_key = tk.StringVar()
-        self._build_entry(parent, self._ms_api_key, show="•")
+        self._build_entry(ms_card, self._ms_api_key, show="•")
+        tk.Frame(ms_card, bg=PALETTE["bg_card"], height=8).pack()
 
-        tk.Frame(parent, bg=PALETTE["bg_dark"], height=8).pack()
-
-        self._ms_btn = tk.Button(parent, text="⚡  Check  Mouser",
-            bg=PALETTE["bg_card"], fg=PALETTE["text_muted"],
+        self._ms_btn = tk.Button(ms_card, text="⚡  Check Mouser",
+            bg=PALETTE["bg_hover"], fg=PALETTE["text_muted"],
             font=FONT_UI, relief="flat", cursor="hand2",
-            pady=8, state="disabled", command=self._run_mouser_check)
-        self._ms_btn.pack(fill="x")
+            pady=7, state="disabled", bd=0,
+            command=self._run_mouser_check)
+        self._ms_btn.pack(fill="x", padx=8, pady=(0, 6))
 
-        self._ms_progress = ttk.Progressbar(parent,
-            style="BomTool.Horizontal.TProgressbar", mode="determinate")
-        self._ms_progress.pack(fill="x", pady=(6, 0))
+        self._ms_progress = ttk.Progressbar(ms_card,
+            style="Accent.Horizontal.TProgressbar", mode="determinate")
+        self._ms_progress.pack(fill="x", padx=8, pady=(0, 8))
 
-        tk.Frame(parent, bg=PALETTE["border"], height=1).pack(fill="x", pady=16)
+        # ── SUMMARY ──
+        tk.Frame(parent, bg=PALETTE["bg_dark"], height=14).pack()
+        self._build_card_header(parent, "SUMMARY")
+        summary_card = tk.Frame(parent, bg=PALETTE["bg_card"],
+                                highlightbackground=PALETTE["border"],
+                                highlightthickness=1)
+        summary_card.pack(fill="x", pady=(4, 0))
 
-        section_label("SUMMARY")
         self._summary_cards = {}
-        for key, label, color in [
+        badge_defs = [
             ("added",    "Added",    PALETTE["added"]),
             ("removed",  "Removed",  PALETTE["removed"]),
             ("qty",      "Qty Δ",    PALETTE["changed"]),
             ("mfr",      "Mfr Δ",    PALETTE["changed"]),
             ("obsolete", "Obsolete", PALETTE["obsolete"]),
             ("nrnd",     "NRND",     PALETTE["nrnd"]),
-        ]:
-            row = tk.Frame(parent, bg=PALETTE["bg_card"])
-            row.pack(fill="x", pady=2)
-            tk.Label(row, text=label, bg=PALETTE["bg_card"],
-                fg=PALETTE["text_muted"], font=FONT_LABEL,
-                width=10, anchor="w").pack(side="left", padx=10, pady=5)
-            lbl = tk.Label(row, text="—", bg=PALETTE["bg_card"],
-                fg=color, font=("Consolas", 11, "bold"))
-            lbl.pack(side="right", padx=10)
-            self._summary_cards[key] = lbl
+        ]
+        grid = tk.Frame(summary_card, bg=PALETTE["bg_card"])
+        grid.pack(fill="x", padx=8, pady=8)
+        for i, (key, label, color) in enumerate(badge_defs):
+            cell = tk.Frame(grid, bg=PALETTE["bg_hover"],
+                            highlightbackground=PALETTE["border"],
+                            highlightthickness=1)
+            cell.grid(row=i // 2, column=i % 2,
+                      padx=3, pady=3, sticky="nsew")
+            grid.columnconfigure(i % 2, weight=1)
+            num_lbl = tk.Label(cell, text="—", bg=PALETTE["bg_hover"],
+                               fg=color, font=FONT_NUM, pady=4)
+            num_lbl.pack()
+            tk.Label(cell, text=label.upper(), bg=PALETTE["bg_hover"],
+                     fg=PALETTE["text_muted"], font=FONT_CAP).pack(pady=(0, 6))
+            self._summary_cards[key] = num_lbl
 
-        tk.Frame(parent, bg=PALETTE["border"], height=1).pack(fill="x", pady=16)
-
+        # ── Save ボタン ──
+        tk.Frame(parent, bg=PALETTE["bg_dark"], height=14).pack()
         self._save_btn = tk.Button(parent, text="↓  Save Excel Report",
             bg=PALETTE["bg_card"], fg=PALETTE["text_muted"],
             font=FONT_UI, relief="flat", cursor="hand2",
-            pady=8, state="disabled", command=self._save_report)
+            pady=9, state="disabled", bd=0,
+            highlightbackground=PALETTE["border"],
+            highlightthickness=1,
+            command=self._save_report)
         self._save_btn.pack(fill="x")
+        _bind_hover(self._save_btn, PALETTE["bg_card"], PALETTE["bg_hover"])
+
+    def _build_card_header(self, parent, text):
+        tk.Label(parent, text=text, bg=PALETTE["bg_dark"],
+                 fg=PALETTE["text_muted"], font=FONT_CAP,
+                 anchor="w").pack(fill="x")
 
     def _build_file_row(self, parent, var: tk.StringVar):
-        frame = tk.Frame(parent, bg=PALETTE["bg_card"])
-        frame.pack(fill="x")
-        tk.Entry(frame, textvariable=var, bg=PALETTE["bg_card"],
-            fg=PALETTE["mono"], insertbackground=PALETTE["accent"],
-            relief="flat", font=FONT_MONO, bd=0
-            ).pack(side="left", fill="both", expand=True, padx=(8, 0), pady=8)
-        tk.Button(frame, text="…", bg=PALETTE["bg_card"],
-            fg=PALETTE["text_muted"], relief="flat", cursor="hand2",
-            font=("Segoe UI", 11), padx=8,
-            command=lambda v=var: self._browse_file(v)
-            ).pack(side="right")
+        row = tk.Frame(parent, bg=PALETTE["bg_card"])
+        row.pack(fill="x")
+        tk.Entry(row, textvariable=var,
+                 bg=PALETTE["bg_card"], fg=PALETTE["mono"],
+                 insertbackground=PALETTE["accent"],
+                 relief="flat", font=FONT_MONO, bd=0
+                 ).pack(side="left", fill="both", expand=True, padx=(10, 0), pady=6)
+        btn = tk.Button(row, text="…",
+                        bg=PALETTE["bg_card"], fg=PALETTE["text_muted"],
+                        relief="flat", cursor="hand2",
+                        font=("Segoe UI", 12), padx=10, bd=0,
+                        command=lambda v=var: self._browse_file(v))
+        btn.pack(side="right", padx=(0, 4))
+        _bind_hover(btn, PALETTE["bg_card"], PALETTE["bg_hover"],
+                    PALETTE["text_muted"], PALETTE["text"])
 
     def _build_entry(self, parent, var: tk.StringVar, show: str):
-        frame = tk.Frame(parent, bg=PALETTE["bg_card"])
-        frame.pack(fill="x")
-        tk.Entry(frame, textvariable=var, bg=PALETTE["bg_card"],
-            fg=PALETTE["mono"], insertbackground=PALETTE["accent"],
-            relief="flat", font=FONT_MONO, bd=0, show=show
-            ).pack(fill="x", padx=8, pady=6)
+        frame = tk.Frame(parent, bg=PALETTE["bg_hover"],
+                         highlightbackground=PALETTE["border"],
+                         highlightthickness=1)
+        frame.pack(fill="x", padx=10, pady=(0, 4))
+        tk.Entry(frame, textvariable=var,
+                 bg=PALETTE["bg_hover"], fg=PALETTE["mono"],
+                 insertbackground=PALETTE["accent"],
+                 relief="flat", font=FONT_MONO, bd=0, show=show
+                 ).pack(fill="x", padx=8, pady=5)
+
+    # ----------------------------------------------------------
+    # 右パネル（タブ）
+    # ----------------------------------------------------------
 
     def _build_result_panel(self, parent):
-        self._notebook = ttk.Notebook(parent, style="Dark.TNotebook")
+        # タブ下線インジケーター用のラッパー
+        wrapper = tk.Frame(parent, bg=PALETTE["bg_dark"])
+        wrapper.pack(fill="both", expand=True)
+
+        self._notebook = ttk.Notebook(wrapper, style="Dark.TNotebook")
         self._notebook.pack(fill="both", expand=True)
+
         self._tabs = {}
         self._build_diff_tabs()
 
-        # Lifecycle タブ
-        dk_frame = tk.Frame(self._notebook, bg=PALETTE["bg_panel"])
-        self._notebook.add(dk_frame, text="⚡  Lifecycle")
-        self._build_lifecycle_tab(dk_frame)
+        lc_frame = tk.Frame(self._notebook, bg=PALETTE["bg_panel"])
+        self._notebook.add(lc_frame, text="⚡  Lifecycle")
+        self._build_lifecycle_tab(lc_frame)
+
+        # タブ選択時に下線バーを動かす（アクセント強調）
+        self._notebook.bind("<<NotebookTabChanged>>", self._on_tab_change)
+
+    def _on_tab_change(self, _):
+        pass  # 将来の拡張用
 
     def _build_diff_tabs(self):
-        """
-        BOM差分の4タブを構築する。
-        カラム名は column_config から取得するため、設定変更後に再構築できる。
-        """
         cols = get_column_names()
         pn   = cols["part_number"]
         mfr  = cols["manufacturer"]
@@ -312,36 +510,35 @@ class BomApp(tk.Tk):
         desc = cols["description"]
 
         tab_defs = [
-            ("added",   "＋  Added",
+            ("added",   "+ Added",
              [pn, mfr, qty, desc], PALETTE["added_bg"]),
-            ("removed", "－  Removed",
+            ("removed", "− Removed",
              [pn, mfr, qty, desc], PALETTE["removed_bg"]),
-            ("qty",     "△  Qty Changed",
+            ("qty",     "△ Qty Changed",
              [pn, f"Old {qty}", f"New {qty}"], PALETTE["changed_bg"]),
-            ("mfr",     "△  Mfr Changed",
+            ("mfr",     "△ Mfr Changed",
              [pn, f"Old {mfr}", f"New {mfr}"], PALETTE["changed_bg"]),
         ]
         for key, label, columns, row_bg in tab_defs:
             frame = tk.Frame(self._notebook, bg=PALETTE["bg_panel"])
-            self._notebook.add(frame, text=label)
+            self._notebook.add(frame, text=f"  {label}  ")
             self._tabs[key] = self._build_treeview(frame, columns, row_bg)
 
     def _build_treeview(self, parent, columns: list, row_bg: str) -> ttk.Treeview:
         container = tk.Frame(parent, bg=PALETTE["bg_panel"])
-        container.pack(fill="both", expand=True, padx=1, pady=1)
+        container.pack(fill="both", expand=True)
 
         vsb = ttk.Scrollbar(container, orient="vertical",
-            style="Dark.Vertical.TScrollbar")
+                             style="Dark.Vertical.TScrollbar")
         vsb.pack(side="right", fill="y")
 
         tree = ttk.Treeview(container, columns=columns, show="headings",
-            style="Dark.Treeview", yscrollcommand=vsb.set)
+                            style="Dark.Treeview", yscrollcommand=vsb.set)
         vsb.configure(command=tree.yview)
         tree.pack(fill="both", expand=True)
 
         for col in columns:
-            # 長いカラム名は広めに、短いものは狭めに
-            w = max(100, min(len(col) * 11, 280))
+            w = max(110, min(len(col) * 11, 300))
             tree.column(col, width=w, minwidth=60, anchor="w")
             tree.heading(col, text=col, anchor="w")
 
@@ -351,26 +548,27 @@ class BomApp(tk.Tk):
 
     def _build_lifecycle_tab(self, parent):
         tk.Label(parent,
-            text="LIFECYCLE STATUS  (click row to view substitutes)",
-            bg=PALETTE["bg_panel"], fg=PALETTE["text_muted"],
-            font=FONT_SMALL, anchor="w").pack(fill="x", padx=8, pady=(8, 2))
+                 text="LIFECYCLE STATUS  —  click a row to view substitutes",
+                 bg=PALETTE["bg_panel"], fg=PALETTE["text_muted"],
+                 font=FONT_SMALL, anchor="w").pack(fill="x", padx=10, pady=(10, 4))
 
         lc_frame = tk.Frame(parent, bg=PALETTE["bg_panel"])
-        lc_frame.pack(fill="both", expand=True, padx=1, pady=1)
+        lc_frame.pack(fill="both", expand=True)
 
         vsb_lc = ttk.Scrollbar(lc_frame, orient="vertical",
-            style="Dark.Vertical.TScrollbar")
+                                style="Dark.Vertical.TScrollbar")
         vsb_lc.pack(side="right", fill="y")
 
-        cols   = get_column_names()
+        cols    = get_column_names()
         lc_cols = [cols["part_number"], cols["manufacturer"], "Status", cols["description"]]
         self._lc_tree = ttk.Treeview(lc_frame, columns=lc_cols,
-            show="headings", style="Dark.Treeview", yscrollcommand=vsb_lc.set)
+                                     show="headings", style="Dark.Treeview",
+                                     yscrollcommand=vsb_lc.set)
         vsb_lc.configure(command=self._lc_tree.yview)
         self._lc_tree.pack(fill="both", expand=True)
 
         for col in lc_cols:
-            w = 120 if col == "Status" else max(100, min(len(col) * 11, 280))
+            w = 120 if col == "Status" else max(110, min(len(col) * 11, 300))
             self._lc_tree.column(col, width=w, minwidth=60, anchor="w")
             self._lc_tree.heading(col, text=col, anchor="w")
 
@@ -384,24 +582,25 @@ class BomApp(tk.Tk):
 
         self._lc_tree.bind("<<TreeviewSelect>>", self._on_lifecycle_select)
 
-        tk.Frame(parent, bg=PALETTE["border"], height=1).pack(fill="x", pady=4)
+        tk.Frame(parent, bg=PALETTE["border"], height=1).pack(fill="x", pady=6)
 
-        tk.Label(parent, text="SUBSTITUTES  (for selected part)",
-            bg=PALETTE["bg_panel"], fg=PALETTE["text_muted"],
-            font=FONT_SMALL, anchor="w").pack(fill="x", padx=8, pady=(4, 2))
+        tk.Label(parent, text="SUBSTITUTES  —  for selected part",
+                 bg=PALETTE["bg_panel"], fg=PALETTE["text_muted"],
+                 font=FONT_SMALL, anchor="w").pack(fill="x", padx=10, pady=(0, 4))
 
         sub_frame = tk.Frame(parent, bg=PALETTE["bg_panel"], height=200)
-        sub_frame.pack(fill="x", padx=1, pady=(0, 4))
+        sub_frame.pack(fill="x", pady=(0, 4))
         sub_frame.pack_propagate(False)
 
         vsb_sub = ttk.Scrollbar(sub_frame, orient="vertical",
-            style="Dark.Vertical.TScrollbar")
+                                 style="Dark.Vertical.TScrollbar")
         vsb_sub.pack(side="right", fill="y")
 
         sub_cols = ["Mfr Part Number", "DigiKey / Mouser P/N",
                     "Manufacturer Name", "Description", "Source"]
         self._sub_tree = ttk.Treeview(sub_frame, columns=sub_cols,
-            show="headings", style="Dark.Treeview", yscrollcommand=vsb_sub.set)
+                                      show="headings", style="Dark.Treeview",
+                                      yscrollcommand=vsb_sub.set)
         vsb_sub.configure(command=self._sub_tree.yview)
         self._sub_tree.pack(fill="both", expand=True)
 
@@ -414,33 +613,40 @@ class BomApp(tk.Tk):
         }
         for col in sub_cols:
             self._sub_tree.column(col, width=sub_widths.get(col, 120),
-                minwidth=50, anchor="w")
+                                  minwidth=50, anchor="w")
             self._sub_tree.heading(col, text=col, anchor="w")
 
         self._sub_tree.tag_configure("sub_row", background=PALETTE["bg_card"])
         self._sub_tree.tag_configure("sub_alt", background=PALETTE["bg_panel"])
 
     def _build_statusbar(self):
-        bar = tk.Frame(self, bg=PALETTE["bg_panel"], height=28)
+        bar = tk.Frame(self, bg=PALETTE["bg_panel"], height=30)
         bar.pack(fill="x", side="bottom")
         bar.pack_propagate(False)
         tk.Frame(bar, bg=PALETTE["border"], height=1).pack(fill="x")
-        self._status_var = tk.StringVar(
-            value="Ready  —  Select files and click Compare")
-        tk.Label(bar, textvariable=self._status_var,
-            bg=PALETTE["bg_panel"], fg=PALETTE["text_muted"],
-            font=("Segoe UI", 9), anchor="w"
-            ).pack(side="left", padx=12, pady=4)
+
+        inner = tk.Frame(bar, bg=PALETTE["bg_panel"])
+        inner.pack(fill="x", padx=12, pady=4)
+
+        self._status_dot = tk.Label(inner, text="●", bg=PALETTE["bg_panel"],
+                                    fg=PALETTE["text_muted"], font=("Segoe UI", 8))
+        self._status_dot.pack(side="left", padx=(0, 6))
+
+        self._status_var = tk.StringVar(value="Ready  —  Select files and click Compare")
+        tk.Label(inner, textvariable=self._status_var,
+                 bg=PALETTE["bg_panel"], fg=PALETTE["text_muted"],
+                 font=FONT_LABEL, anchor="w").pack(side="left")
+
+    def _set_status(self, text: str, color: str = None):
+        self._status_var.set(text)
+        if color:
+            self._status_dot.config(fg=color)
 
     # ----------------------------------------------------------
     # 設定ダイアログ
     # ----------------------------------------------------------
 
     def _open_settings(self):
-        """
-        設定ダイアログを開く。
-        設定が保存された場合、差分タブのカラム名表示を再構築する。
-        """
         changed = open_settings(self)
         if changed:
             self._rebuild_diff_tabs()
@@ -448,21 +654,11 @@ class BomApp(tk.Tk):
                 "設定を更新しました。次の Compare から新しいカラム名が適用されます。")
 
     def _rebuild_diff_tabs(self):
-        """
-        差分タブ（Added / Removed / Qty Changed / Mfr Changed）を
-        現在の column_config に合わせて再構築する。
-        既存データはクリアされます。
-        """
-        # 先頭4タブ（差分タブ）を削除
         for _ in range(4):
             if self._notebook.tabs():
                 self._notebook.forget(0)
         self._tabs = {}
 
-        # Lifecycle タブを一時退避（idx=0 になっているはずなので取得）
-        lc_frame_id = self._notebook.tabs()[0] if self._notebook.tabs() else None
-
-        # 差分タブを先頭に再挿入
         cols = get_column_names()
         pn   = cols["part_number"]
         mfr  = cols["manufacturer"]
@@ -470,24 +666,22 @@ class BomApp(tk.Tk):
         desc = cols["description"]
 
         tab_defs = [
-            ("added",   "＋  Added",
+            ("added",   "+ Added",
              [pn, mfr, qty, desc], PALETTE["added_bg"]),
-            ("removed", "－  Removed",
+            ("removed", "− Removed",
              [pn, mfr, qty, desc], PALETTE["removed_bg"]),
-            ("qty",     "△  Qty Changed",
+            ("qty",     "△ Qty Changed",
              [pn, f"Old {qty}", f"New {qty}"], PALETTE["changed_bg"]),
-            ("mfr",     "△  Mfr Changed",
+            ("mfr",     "△ Mfr Changed",
              [pn, f"Old {mfr}", f"New {mfr}"], PALETTE["changed_bg"]),
         ]
         for i, (key, label, columns, row_bg) in enumerate(tab_defs):
             frame = tk.Frame(self._notebook, bg=PALETTE["bg_panel"])
-            self._notebook.insert(i, frame, text=label)
+            self._notebook.insert(i, frame, text=f"  {label}  ")
             self._tabs[key] = self._build_treeview(frame, columns, row_bg)
 
-        # データをクリア（カラム構造が変わっているため再比較が必要）
         self._results = None
-        self._set_status(
-            "設定変更後は ▶ Compare を再実行してください")
+        self._set_status("設定変更後は ▶ Compare を再実行してください")
 
     # ----------------------------------------------------------
     # BOM 比較
@@ -509,7 +703,7 @@ class BomApp(tk.Tk):
 
         self._run_btn.config(state="disabled", text="Comparing…")
         self._progress.start(12)
-        self._set_status("Comparing…")
+        self._set_status("Comparing…", PALETTE["accent_light"])
 
         threading.Thread(
             target=self._comparison_worker,
@@ -552,20 +746,25 @@ class BomApp(tk.Tk):
 
         self._progress.stop()
         self._run_btn.config(state="normal", text="▶  Compare")
-        self._dk_btn.config(state="normal", fg=PALETTE["accent"])
-        self._ms_btn.config(state="normal", fg=PALETTE["accent"])
-        self._save_btn.config(state="normal", fg=PALETTE["accent"])
+        self._dk_btn.config(state="normal", fg=PALETTE["accent_light"])
+        self._ms_btn.config(state="normal", fg=PALETTE["accent_light"])
+        self._save_btn.config(state="normal", fg=PALETTE["accent_light"])
+        _bind_hover(self._dk_btn, PALETTE["bg_hover"], PALETTE["accent_dim"],
+                    PALETTE["accent_light"], PALETTE["accent_light"])
+        _bind_hover(self._ms_btn, PALETTE["bg_hover"], PALETTE["accent_dim"],
+                    PALETTE["accent_light"], PALETTE["accent_light"])
 
         total = (len(results["added"]) + len(results["removed"])
                  + len(results["qty_changed"]) + len(results["mfr_changed"]))
         self._set_status(
             f"Done  —  {total} difference(s)  ·  {len(new_pns)} parts in new BOM  ·  "
-            "Click ⚡ Check DigiKey or ⚡ Check Mouser")
+            "Click ⚡ Check DigiKey or ⚡ Check Mouser",
+            PALETTE["added"])
 
     def _on_comparison_error(self, error_msg: str):
         self._progress.stop()
         self._run_btn.config(state="normal", text="▶  Compare")
-        self._set_status(f"Error: {error_msg}")
+        self._set_status(f"Error: {error_msg}", PALETTE["removed"])
         messagebox.showerror("比較エラー", error_msg)
 
     def _populate_tab(self, key: str, df, value_columns: list):
@@ -575,7 +774,7 @@ class BomApp(tk.Tk):
         for i, (part_number, row) in enumerate(df.iterrows()):
             values = [part_number] + [row.get(col, "") for col in value_columns]
             tree.insert("", "end", values=values,
-                tags=("colored" if i % 2 == 0 else "colored_alt",))
+                        tags=("colored" if i % 2 == 0 else "colored_alt",))
 
     # ----------------------------------------------------------
     # DigiKey ライフサイクルチェック
@@ -592,7 +791,8 @@ class BomApp(tk.Tk):
 
         self._dk_btn.config(state="disabled", text="Checking…")
         self._dk_progress.config(value=0, maximum=len(self._new_part_numbers))
-        self._set_status(f"DigiKey API: 0 / {len(self._new_part_numbers)} parts…")
+        self._set_status(f"DigiKey API: 0 / {len(self._new_part_numbers)} parts…",
+                         PALETTE["changed"])
 
         threading.Thread(
             target=self._digikey_worker,
@@ -620,7 +820,8 @@ class BomApp(tk.Tk):
     def _on_dk_progress(self, done, total, pn, lc):
         self._dk_progress.config(value=done)
         self._set_status(
-            f"DigiKey API: {done} / {total}  —  {pn} → {lc.get('status_label','?')}")
+            f"DigiKey API: {done} / {total}  —  {pn} → {lc.get('status_label','?')}",
+            PALETTE["changed"])
 
     def _on_dk_done(self, results: dict):
         self._dk_results = results
@@ -631,13 +832,15 @@ class BomApp(tk.Tk):
 
         self._summary_cards["obsolete"].config(text=str(obsolete_n))
         self._summary_cards["nrnd"].config(text=str(nrnd_n))
-        self._dk_btn.config(state="normal", text="⚡  Check  DigiKey")
-        self._set_status(f"DigiKey check done  —  Obsolete: {obsolete_n}  NRND: {nrnd_n}")
+        self._dk_btn.config(state="normal", text="⚡  Check DigiKey")
+        self._set_status(
+            f"DigiKey check done  —  Obsolete: {obsolete_n}  NRND: {nrnd_n}",
+            PALETTE["active"])
         self._notebook.select(4)
 
     def _on_dk_error(self, error_msg: str):
-        self._dk_btn.config(state="normal", text="⚡  Check  DigiKey")
-        self._set_status(f"DigiKey Error: {error_msg}")
+        self._dk_btn.config(state="normal", text="⚡  Check DigiKey")
+        self._set_status(f"DigiKey Error: {error_msg}", PALETTE["removed"])
         messagebox.showerror("DigiKey APIエラー", error_msg)
 
     # ----------------------------------------------------------
@@ -645,7 +848,6 @@ class BomApp(tk.Tk):
     # ----------------------------------------------------------
 
     def _run_mouser_check(self):
-        """Mouser API によるライフサイクルチェックを開始する"""
         if not self._new_part_numbers:
             messagebox.showwarning("No Data", "先に Compare を実行してください。")
             return
@@ -656,7 +858,8 @@ class BomApp(tk.Tk):
 
         self._ms_btn.config(state="disabled", text="Checking…")
         self._ms_progress.config(value=0, maximum=len(self._new_part_numbers))
-        self._set_status(f"Mouser API: 0 / {len(self._new_part_numbers)} parts…")
+        self._set_status(f"Mouser API: 0 / {len(self._new_part_numbers)} parts…",
+                         PALETTE["changed"])
 
         threading.Thread(
             target=self._mouser_worker,
@@ -664,7 +867,6 @@ class BomApp(tk.Tk):
             daemon=True).start()
 
     def _mouser_worker(self, api_key: str):
-        """バックグラウンドで Mouser API を順次呼び出すワーカー"""
         try:
             if api_key:
                 client = MouserClient(api_key)
@@ -685,11 +887,11 @@ class BomApp(tk.Tk):
     def _on_ms_progress(self, done: int, total: int, pn: str, lc: dict):
         self._ms_progress.config(value=done)
         self._set_status(
-            f"Mouser API: {done} / {total}  —  {pn} → {lc.get('status_label','?')}")
+            f"Mouser API: {done} / {total}  —  {pn} → {lc.get('status_label','?')}",
+            PALETTE["changed"])
 
     def _on_ms_done(self, results: dict):
         self._ms_results = results
-        # DigiKey結果とマージして表示（DigiKeyが優先）
         merged = {**results, **self._dk_results}
         self._populate_lifecycle_tab(merged)
 
@@ -698,13 +900,15 @@ class BomApp(tk.Tk):
 
         self._summary_cards["obsolete"].config(text=str(obsolete_n))
         self._summary_cards["nrnd"].config(text=str(nrnd_n))
-        self._ms_btn.config(state="normal", text="⚡  Check  Mouser")
-        self._set_status(f"Mouser check done  —  Obsolete: {obsolete_n}  NRND: {nrnd_n}")
+        self._ms_btn.config(state="normal", text="⚡  Check Mouser")
+        self._set_status(
+            f"Mouser check done  —  Obsolete: {obsolete_n}  NRND: {nrnd_n}",
+            PALETTE["active"])
         self._notebook.select(4)
 
     def _on_ms_error(self, error_msg: str):
-        self._ms_btn.config(state="normal", text="⚡  Check  Mouser")
-        self._set_status(f"Mouser Error: {error_msg}")
+        self._ms_btn.config(state="normal", text="⚡  Check Mouser")
+        self._set_status(f"Mouser Error: {error_msg}", PALETTE["removed"])
         messagebox.showerror("Mouser APIエラー", error_msg)
 
     def _clear_lifecycle_tab(self):
@@ -739,14 +943,12 @@ class BomApp(tk.Tk):
                 iid=pn, tags=(lifecycle,))
 
     def _on_lifecycle_select(self, event):
-        """行選択時に DigiKey / Mouser 両方の代替品テーブルを更新する"""
         selection = self._lc_tree.selection()
         if not selection:
             return
 
         pn = selection[0]
 
-        # DigiKey と Mouser の代替品を両方収集して Source を付与
         all_subs = []
         dk_lc = self._dk_results.get(pn, {})
         for sub in dk_lc.get("substitutes", []):
@@ -765,7 +967,6 @@ class BomApp(tk.Tk):
             return
 
         for i, sub in enumerate(all_subs):
-            # DigiKey品番 または Mouser品番（どちらかに入る）
             dist_pn = sub.get("digikey_part_number", "") or sub.get("mouser_part_number", "")
             self._sub_tree.insert("", "end", values=[
                 sub.get("mfr_part_number", ""),
@@ -791,13 +992,10 @@ class BomApp(tk.Tk):
             return
         try:
             save_report(self._results, path, self._dk_results or None)
-            self._set_status(f"Saved → {os.path.basename(path)}")
+            self._set_status(f"Saved → {os.path.basename(path)}", PALETTE["active"])
             messagebox.showinfo("保存完了", f"レポートを保存しました:\n{path}")
         except Exception as e:
             messagebox.showerror("保存エラー", str(e))
-
-    def _set_status(self, text: str):
-        self._status_var.set(text)
 
 
 def launch():
