@@ -34,10 +34,8 @@ def main() -> None:
             shutil.copy2(root / filename, package / filename)
         samples = package / "samples"
         samples.mkdir(exist_ok=True)
-        for filename in ("sample_old.xlsx", "sample_new.xlsx"):
-            shutil.copy2(root / filename, samples / filename)
-        for revision in ("old", "new"):
-            filename = f"demo_{revision}_bom.xlsx"
+        for filename in ("sample_old.xlsx", "sample_new.xlsx",
+                         "demo_old_bom.xlsx", "demo_new_bom.xlsx"):
             shutil.copy2(root / "samples" / filename, samples / filename)
         archive = shutil.make_archive(str(dist / "BOM-Diff-Tool-Windows-x64"), "zip", staging, name)
         print(archive)

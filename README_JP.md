@@ -260,8 +260,6 @@ bom-diff-tool/
 │   └── settings_dialog.py   # カラム名設定ダイアログ
 ├── tests/
 │   └── test_all.py          # 自動テスト（pytest）
-├── make_demo_gif.py     # デモGIF生成スクリプト
-├── capture_demo.py      # スクリーンショット撮影スクリプト
 ├── tools/
 │   ├── build_windows.py
 │   ├── build_installer.py

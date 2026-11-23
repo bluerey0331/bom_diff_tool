@@ -54,7 +54,7 @@ def main():
     files = [root / name for name in
              ("main.py", "prepare.py", "README.md", "README_JP.md", "CHANGELOG.md",
               "requirements.txt", "config.ini.example", "LICENSE",
-              "sample_old.xlsx", "sample_new.xlsx", "samples/demo_old_bom.xlsx",
+              "samples/sample_old.xlsx", "samples/sample_new.xlsx", "samples/demo_old_bom.xlsx",
               "samples/demo_new_bom.xlsx", "tools/BomDiffTool.iss", "tools/build_windows.py",
               "tools/build_installer.py", "tools/release_metadata.py", "tools/verify_installer.ps1",
               ".github/workflows/windows-download.yml")]

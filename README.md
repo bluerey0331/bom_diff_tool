@@ -260,8 +260,6 @@ bom-diff-tool/
 │   └── settings_dialog.py   # Column name settings dialog
 ├── tests/
 │   └── test_all.py          # Automated tests (pytest)
-├── make_demo_gif.py     # Demo GIF generator
-├── capture_demo.py      # Screenshot capture script
 ├── tools/
 │   ├── build_windows.py
 │   ├── build_installer.py
