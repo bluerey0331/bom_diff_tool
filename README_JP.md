@@ -44,30 +44,38 @@ BOM（部品表）を比較して差分を検出する Python 製デスクトッ
 
 ## デモ
 
-BOM ファイルを選んで **▶ Compare** をクリックするだけで、差分が即座に表示されます。
+2つのBOMファイルを指定して **▶ Compare** を押すだけ — 追加・削除・変更された部品がタブ別に色分けで即座に表示されます。
 
 ![Demo](demo.gif)
 
-| ステップ | 内容 |
+| フェーズ | 画面に映っていること |
 |---|---|
-| **① ファイル選択** | **…** ボタンで `old.xlsx` と `new.xlsx` を指定 |
-| **② ▶ Compare** | 差分を自動検出してカテゴリ別に分類 |
-| **③ 結果表示** | 追加 / 削除 / Qty変更 / Mfr変更 がタブ別に色分けで表示 |
+| **入力** | ファイルパスを入力 — Excelのヘッダーからカラム名を自動認識 |
+| **▶ Compare** | バックグラウンドで差分処理。プログレスバーがアニメーション |
+| **Added タブ** | 新規追加部品が緑色で表示（品番・メーカー・数量） |
+| **タブ切り替え** | Removed → Qty Changed タブも独立して差分を表示 |
+| **サマリーバッジ** | Added・Removed・Qty Δ・Mfr Δ の件数がサイドバーに大きく表示 |
 
 ---
 
 ## スクリーンショット
 
-**① ファイルを選択 — ファイルパスとカラム名が自動で認識される**
+**① ファイル選択 — パスを入力するとカラム名が自動認識される**
 
 ![ファイル選択](screenshots/01_files_loaded.png)
 
-**② ▶ Compare をクリック — Added タブに追加部品が緑色で表示される**
+左パネルはカード型で整理されています。上から **BOM FILES**（ファイル入力）、**DigiKey / Mouser API**（認証情報）、**Summary**（差分件数バッジ）の順に並んでいます。
+
+**② ▶ Compare 後 — Added タブに追加部品が緑色の行で表示される**
 
 ![比較結果](screenshots/02_compare_result.png)
 
-> ウィンドウ下部のステータスバーに差分件数・新BOMの部品数が表示されます。  
-> **⚡ Check DigiKey** または **⚡ Check Mouser** ボタンで新規部品のライフサイクルチェックができます。
+ステータスバーにリアルタイムで結果が表示されます（`Done — 5 difference(s) · 6 parts in new BOM`）。
+**DigiKeyで確認** または **Mouserで確認** ボタンが有効になり、新規部品のライフサイクルチェックを実行できます。
+
+**③ bom_diff_report.xlsx に書き出し — 差分カテゴリごとにシートが分かれる**
+
+![レポート保存](screenshots/03_report_saved.png)
 
 **③ Excel レポート（bom_diff_report.xlsx）が差分シート別に保存される**
 
@@ -90,7 +98,32 @@ BOM ファイルを選んで **▶ Compare** をクリックするだけで、�
 
 ---
 
-## 必要環境
+## Windows 版のダウンロード
+
+### セットアップEXE
+
+[GitHub Releases](https://github.com/bluerey0331/bom_diff_tool/releases) から `BOM-Diff-Tool-Setup-Windows-x64.exe` をダウンロードして実行してください。PythonやExcelのインストールは不要です。インストール後、スタートメニューの **BOM Diff Tool** から日本語版・英語版を選べます。
+
+Windows x64でセットアップEXEを作る場合は、下記のZIPをビルドしてから `python tools/build_installer.py --iscc "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"` を実行します。
+
+配布ページの `release-metadata.json` にビルド元のコミット、作業ツリーの状態、依存関係と検証結果を記録します。`SHA256SUMS.txt` でダウンロードしたファイルを照合できます。署名付きセットアップを作る場合は、コード署名証明書を用意し、ビルド時に `--signtool`、`--thumbprint`、`--timestamp-url` を指定します。
+
+BOM は型番を照合キーにします。型番の空欄・重複、数量の空欄・非数値がある場合は、入力ファイルとExcelの行番号を表示して比較を止めます。両社のライフサイクル判定が異なる場合、明細に両方の判定を出し、上部の件数には部品ごとにより厳しい判定を反映します。
+
+### ポータブルZIP
+
+
+1. [GitHub Releases](https://github.com/bluerey0331/bom_diff_tool/releases) の対象リリースから `BOM-Diff-Tool-Windows-x64.zip` をダウンロードします。
+2. ZIP 全体を展開し、日本語版は `BOM Diff Tool.exe`、英語版は `BOM Diff Tool (English).exe` を開きます。Python のインストールは不要です。
+3. **デモを開く** で同梱の旧・新BOMを比較できます。各APIの **接続テスト** はBOMを読み込む前に実行できます。
+
+「API設定」の **認証情報を保存** で次回起動時に入力内容を復元できます。照会を開始したときも、そのサービスに入力した認証情報を保存します。保存済みの認証情報を削除するには、対象サービスの入力欄を空にして **認証情報を保存** を押します。
+
+認証情報はWindows資格情報マネージャーに保存されます。従来の `config.ini` に保存されている認証情報は、初回起動時に移行します。列・シート設定は `%LOCALAPPDATA%\BOM Diff Tool\config.ini` に保存されます。
+
+Windows x64 の Python 環境で配布 ZIP を作るには、`python -X utf8 -m pip install -r requirements.txt pyinstaller` を実行してから `python tools/build_windows.py` を実行します。GitHub Actions の **Windows download** からもビルドでき、リリースを公開すると ZIP が添付されます。
+
+## ソース版の必要環境
 
 - Python 3.11 以上
 - Windows / macOS / Linux（tkinter が使える環境）
@@ -101,15 +134,15 @@ BOM ファイルを選んで **▶ Compare** をクリックするだけで、�
 
 ```bash
 # 1. リポジトリをクローン
-git clone https://github.com/your-username/bom-diff-tool.git
-cd bom-diff-tool
+git clone https://github.com/bluerey0331/bom_diff_tool.git
+cd bom_diff_tool
 
 # 2. 依存パッケージをインストール
 pip install -r requirements.txt
 
 # 3. 設定ファイルを作成
 cp config.ini.example config.ini
-# config.ini をエディタで開いて APIキーを設定
+# 列名・シート名をカスタマイズする場合に使います
 ```
 
 ---
@@ -125,12 +158,12 @@ python main.py --cli    # CLI モード
 
 **GUI の操作フロー：**
 
-1. **…** ボタンで OLD / NEW の Excel ファイルを選択（パスを直接入力することも可能）
-2. **▶ Compare** をクリックして差分を確認
-3. ライフサイクルチェックを行う場合は、認証情報を入力して以下のいずれかをクリック：
-   - **⚡ Check DigiKey** — DigiKey API を使用（Client ID + Client Secret が必要）
-   - **⚡ Check Mouser** — Mouser Search API を使用（API Key が必要）
-4. **↓ Save Excel Report** でレポートを保存
+1. **参照** で旧BOM・新BOMを選びます。ファイルパスの入力や旧・新の入れ替えもできます。
+2. **BOMを比較** を押すと、差分の件数と明細が表示されます。
+3. ライフサイクルチェックを行う場合は、**API設定** タブを開いて認証情報を入力し、次のいずれかを押します。
+   - **DigiKeyで確認** — DigiKey API を使用（Client ID + Client Secret が必要）
+   - **Mouserで確認** — Mouser Search API を使用（API Key が必要）
+4. 画面上部の **Excelレポートを保存** から保存先を選びます。
 
 ### Prepare ツール（前処理）
 
@@ -172,7 +205,7 @@ python main.py --cli --old old.xlsx --new new.xlsx --output report.xlsx
 
 1. [DigiKey Developer Portal](https://developer.digikey.com/) でアカウントを作成
 2. アプリを登録して **Client ID** と **Client Secret** を取得
-3. `config.ini` に設定（または環境変数を使用）
+3. Windowsの「API設定」から認証情報を保存するか、環境変数で設定
 
 ```ini
 [digikey]
@@ -198,7 +231,7 @@ export DIGIKEY_CLIENT_SECRET=your_client_secret
 
 1. [Mouser API Hub](https://www.mouser.com/api-hub/) でアカウントを作成
 2. Developer Portal から **API Key** を発行
-3. `config.ini` に設定（または環境変数を使用）
+3. Windowsの「API設定」から認証情報を保存するか、環境変数で設定
 
 ```ini
 [mouser]
@@ -232,18 +265,18 @@ export MOUSER_API_KEY=your_api_key
 
 ## サンプルデータ
 
-`sample_old.xlsx` と `sample_new.xlsx` に動作確認用のダミーデータが含まれています。
+`samples/sample_old.xlsx` と `samples/sample_new.xlsx` に動作確認用のダミーデータが含まれています。
 
 GUI の **…** ボタンで直接選択するか、以下のようにコピーして使用してください。
 
 ```bash
 # macOS / Linux
-cp sample_old.xlsx old.xlsx
-cp sample_new.xlsx new.xlsx
+cp samples/sample_old.xlsx old.xlsx
+cp samples/sample_new.xlsx new.xlsx
 
 # Windows
-copy sample_old.xlsx old.xlsx
-copy sample_new.xlsx new.xlsx
+copy samples\sample_old.xlsx old.xlsx
+copy samples\sample_new.xlsx new.xlsx
 ```
 
 その後 `python main.py` を実行して **▶ Compare** をクリックしてください。
@@ -266,14 +299,17 @@ copy sample_new.xlsx new.xlsx
 bom-diff-tool/
 ├── main.py                  # エントリーポイント（BOM比較ツール）
 ├── prepare.py               # 前処理ツール
+├── run.bat                  # BOM比較ツール起動用（Windows）
+├── run_prepare.bat          # 前処理ツール起動用（Windows）
 ├── requirements.txt         # 依存パッケージ
 ├── config.ini.example       # 設定ファイルのテンプレート
-├── sample_old.xlsx          # サンプルデータ（旧BOM）
-├── sample_new.xlsx          # サンプルデータ（新BOM）
 ├── README.md                # 英語版 README（標準）
 ├── README_JP.md             # このファイル（日本語）
 ├── LICENSE                  # MIT License
 ├── CHANGELOG.md             # 変更履歴
+├── samples/
+│   ├── sample_old.xlsx      # サンプルデータ（旧BOM）
+│   └── sample_new.xlsx      # サンプルデータ（新BOM）
 ├── src/
 │   ├── column_config.py     # カラム名設定の読み書き
 │   ├── comparator.py        # BOM比較ロジック
@@ -286,6 +322,12 @@ bom-diff-tool/
 │   └── settings_dialog.py   # カラム名設定ダイアログ
 ├── tests/
 │   └── test_all.py          # 自動テスト（pytest）
+├── make_demo_gif.py     # デモGIF生成スクリプト
+├── capture_demo.py      # スクリーンショット撮影スクリプト
+├── tools/
+│   ├── build_windows.py
+│   ├── build_installer.py
+│   └── release_metadata.py
 └── .github/
     └── workflows/
         └── test.yml         # GitHub Actions 自動テスト

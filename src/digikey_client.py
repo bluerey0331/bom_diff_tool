@@ -14,6 +14,8 @@ Product Information V4 エンドポイントを使って以下を取得します
 """
 
 import os
+from src.ui_language import tr
+from src.column_config import _CONFIG_PATH, load_api_settings
 import time
 import configparser
 import requests
@@ -57,9 +59,8 @@ _CONFIG_PLACEHOLDER_PREFIX = "YOUR_"
 
 
 def _load_config() -> configparser.ConfigParser:
-    config = configparser.ConfigParser()
-    config_path = os.path.join(os.path.dirname(__file__), "..", "config.ini")
-    config.read(config_path, encoding="utf-8")
+    config = configparser.ConfigParser(interpolation=None)
+    config.read(_CONFIG_PATH, encoding="utf-8")
     return config
 
 
@@ -82,25 +83,18 @@ def load_credentials() -> tuple[str, str]:
     if client_id and client_secret:
         return client_id, client_secret
 
-    config = _load_config()
-    if config.has_section("digikey"):
-        client_id     = config.get("digikey", "client_id",     fallback="")
-        client_secret = config.get("digikey", "client_secret", fallback="")
+    stored = load_api_settings()
+    client_id = stored["client_id"]
+    client_secret = stored["client_secret"]
 
     if not client_id or not client_secret:
-        raise ValueError(
-            "DigiKey APIの認証情報が見つかりません。\n"
-            "環境変数 DIGIKEY_CLIENT_ID / DIGIKEY_CLIENT_SECRET を設定するか、\n"
-            "config.ini に [digikey] セクションを追加してください。"
-        )
+        raise ValueError(tr("API設定でDigiKeyのクライアントIDとシークレットを入力してください。",
+                            "Enter the DigiKey Client ID and Client Secret in API settings."))
 
-    if client_id.startswith(_CONFIG_PLACEHOLDER_PREFIX) or \
-       client_secret.startswith(_CONFIG_PLACEHOLDER_PREFIX):
-        raise ValueError(
-            "config.ini の認証情報がプレースホルダーのままです。\n"
-            "DigiKey Developer Portal (https://developer.digikey.com) で\n"
-            "アプリを作成し、client_id と client_secret を設定してください。"
-        )
+    if (client_id.startswith(_CONFIG_PLACEHOLDER_PREFIX)
+            or client_secret.startswith(_CONFIG_PLACEHOLDER_PREFIX)):
+        raise ValueError(tr("DigiKeyの認証情報を実際の値に置き換えてください。",
+                            "Replace the DigiKey credential placeholders with your credentials."))
 
     return client_id, client_secret
 
@@ -159,6 +153,8 @@ class DigiKeyClient:
             "client_id":     self._client_id,
             "client_secret": self._client_secret,
         }, timeout=10)
+        if resp.status_code in (400, 401):
+            raise ValueError(tr("DigiKeyの認証に失敗しました。Client ID・Client SecretとAPIの利用権限を確認してください。", "DigiKey authentication failed. Check the Client ID, Client Secret, and API permissions."))
         resp.raise_for_status()
         data = resp.json()
         self._access_token  = data["access_token"]
@@ -194,7 +190,7 @@ class DigiKeyClient:
         Returns:
             dict | None: API レスポンス全体、404 の場合は None
         """
-        url  = PRODUCT_DETAILS_URL.format(pn=requests.utils.quote(part_number))
+        url  = PRODUCT_DETAILS_URL.format(pn=requests.utils.quote(part_number, safe=""))
         resp = requests.get(url, headers=self._headers(), timeout=10)
         if resp.status_code == 404:
             return None
@@ -214,12 +210,13 @@ class DigiKeyClient:
         Returns:
             list[dict]: 生の API レスポンス配列（SubstituteProducts）
         """
-        url  = SUBSTITUTIONS_URL.format(pn=requests.utils.quote(part_number))
+        url  = SUBSTITUTIONS_URL.format(pn=requests.utils.quote(part_number, safe=""))
         resp = requests.get(url, headers=self._headers(), timeout=10)
         if resp.status_code == 404:
             return []
         resp.raise_for_status()
-        return resp.json().get("SubstituteProducts", [])
+        payload = resp.json()
+        return payload.get("ProductSubstitutes") or payload.get("SubstituteProducts") or []
 
     def get_recommended_products(self, part_number: str) -> list[dict]:
         """
@@ -234,7 +231,7 @@ class DigiKeyClient:
         Returns:
             list[dict]: 生の API レスポンス配列（RecommendedProducts）
         """
-        url  = RECOMMENDED_URL.format(pn=requests.utils.quote(part_number))
+        url  = RECOMMENDED_URL.format(pn=requests.utils.quote(part_number, safe=""))
         resp = requests.get(url, headers=self._headers(), timeout=10)
         if resp.status_code == 404:
             return []
@@ -278,11 +275,14 @@ class DigiKeyClient:
         try:
             details = self.get_product_details(part_number)
             if details is None:
-                result["error"] = "Part not found in DigiKey"
+                result["status_label"] = "Not Found"
                 return result
 
-            product    = details.get("Product", {})
-            status_str = product.get("ProductStatus", {}).get("Status", "")
+            product = details.get("Product")
+            if not isinstance(product, dict):
+                raise ValueError(tr("DigiKey の部品情報を読み取れませんでした。", "Could not read the DigiKey product details."))
+            status = product.get("ProductStatus") or ""
+            status_str = status.get("Status") or "" if isinstance(status, dict) else status
 
             lifecycle, label = _classify_lifecycle(status_str)
             result["lifecycle"]    = lifecycle
@@ -290,18 +290,22 @@ class DigiKeyClient:
 
             # 元部品のスペックを抽出（AI のランキング判断材料）
             result["source_specs"] = _extract_specs(product)
+            result["description"] = (product.get("Description") or {}).get("ProductDescription", "")
 
             # 廃品・NRND のみ候補を取得
             if lifecycle in (LIFECYCLE_OBSOLETE, LIFECYCLE_NRND):
 
                 # Substitutions（直接代替品・互換性が高い）
-                subs_raw  = self.get_substitutions(part_number)
+                variations = product.get("ProductVariations") or []
+                lookup_number = next((item["DigiKeyProductNumber"] for item in variations
+                                      if item.get("DigiKeyProductNumber")), part_number)
+                subs_raw = self.get_substitutions(lookup_number)
                 subs_list = _parse_candidates(subs_raw[:MAX_SUBSTITUTES],
                                               source="substitution")
                 result["substitutes"] = subs_list  # GUI 表示用
 
                 # RecommendedProducts（推奨品・候補が広め）
-                rec_raw  = self.get_recommended_products(part_number)
+                rec_raw  = self.get_recommended_products(lookup_number)
                 rec_list = _parse_candidates(rec_raw[:MAX_RECOMMENDED],
                                              source="recommended")
 
@@ -309,11 +313,16 @@ class DigiKeyClient:
                 result["candidates"] = _merge_candidates(subs_list, rec_list)
 
         except requests.exceptions.HTTPError as e:
-            result["error"] = f"HTTP {e.response.status_code}: {e.response.text[:120]}"
-        except requests.exceptions.RequestException as e:
-            result["error"] = f"通信エラー: {e}"
-        except Exception as e:
-            result["error"] = f"予期しないエラー: {e}"
+            code = e.response.status_code
+            result["error"] = tr(f"DigiKey APIのHTTPエラー ({code})", f"DigiKey API HTTP error ({code})")
+            result["stop_check"] = code in (401, 403, 429) and result["lifecycle"] == LIFECYCLE_UNKNOWN
+        except requests.exceptions.RequestException:
+            result["error"] = tr("DigiKey APIとの通信に失敗しました。", "Could not connect to the DigiKey API.")
+        except ValueError as e:
+            result["error"] = str(e)
+            result["stop_check"] = True
+        except Exception:
+            result["error"] = tr("DigiKey の応答を処理できませんでした。", "Could not process the DigiKey response.")
 
         return result
 
@@ -388,10 +397,12 @@ def _parse_candidates(raw_list: list[dict], source: str) -> list[dict]:
     for item in raw_list:
         mfr_pn = item.get("ManufacturerProductNumber", "")
         mfr    = item.get("Manufacturer", {}).get("Name", "")
-        desc   = item.get("Description", {}).get("ProductDescription", "")
-        dk_pn  = ""
+        desc = item.get("Description") or ""
+        if isinstance(desc, dict):
+            desc = desc.get("ProductDescription", "")
+        dk_pn = item.get("DigiKeyProductNumber", "")
         variations = item.get("ProductVariations", [])
-        if variations:
+        if variations and not dk_pn:
             dk_pn = variations[0].get("DigiKeyProductNumber", "")
         specs = _extract_specs(item)
 
@@ -402,6 +413,7 @@ def _parse_candidates(raw_list: list[dict], source: str) -> list[dict]:
                 "manufacturer":       mfr,
                 "description":        desc,
                 "specs":              specs,
+                "product_url":        item.get("ProductUrl", ""),
                 "source":             source,
             })
     return result

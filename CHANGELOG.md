@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.1.0] - 2026-11-23
+
+### Added
+
+- Windows x64 installer and portable ZIP with Japanese and English launchers.
+- Material Design-inspired UI, one-click demo workbooks, and per-provider API connection tests.
+- Windows Credential Manager integration and migration from legacy credential settings.
+- Replacement product links, specifications comparison, and a release manifest with SHA-256 checksums.
+
+### Fixed
+
+- BOM validation now reports blank part numbers, duplicate part numbers, and invalid quantities with Excel row numbers.
+- Mouser no longer offers a replacement for a mismatched manufacturer or labels missing lifecycle data as Active.
+- Lifecycle counts reflect the most severe reported result per part, while distributor results remain visible separately.
+- Excel reports preserve string values as text.
+
+---
+
 ## [1.0.0] - 2026-06-21
 
 ### Added

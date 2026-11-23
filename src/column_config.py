@@ -11,9 +11,20 @@ config.ini の [columns] / [sheet_names] セクションに保存・読み込み
 
 import configparser
 import os
+import sys
+from tempfile import NamedTemporaryFile
 
-# config.ini のパス（プロジェクトルート）
-_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config.ini")
+from src import credential_store
+
+# 配布版はユーザーごとに設定を保存する。
+_USER_CONFIG_PATH = os.path.join(
+    os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"),
+    "BOM Diff Tool", "config.ini",
+)
+if getattr(sys, "frozen", False):
+    _CONFIG_PATH = _USER_CONFIG_PATH
+else:
+    _CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config.ini")
 
 
 # ============================================================
@@ -146,20 +157,85 @@ def get_sheet_names() -> dict[str, str]:
     return load_column_config()["sheet_names"]
 
 
+def load_api_settings() -> dict[str, str]:
+    """Read the vault, with existing config.ini values as a migration source."""
+    stored = credential_store.read_credentials()
+    if stored is not None:
+        return stored
+    return _load_legacy_api_settings()
+
+
+def _load_legacy_api_settings():
+    config = _read_ini()
+    if _USER_CONFIG_PATH != _CONFIG_PATH:
+        config.read(_USER_CONFIG_PATH, encoding="utf-8")
+    values = {
+        "client_id": config.get("digikey", "client_id", fallback="").strip(),
+        "client_secret": config.get("digikey", "client_secret", fallback="").strip(),
+        "api_key": config.get("mouser", "api_key", fallback="").strip(),
+    }
+    return {key: "" if value.upper().startswith("YOUR_") else value
+            for key, value in values.items()}
+
+
+def save_api_settings(*, digikey: tuple[str, str] | None = None,
+                      mouser: str | None = None) -> None:
+    """Store the requested credentials before removing legacy plaintext entries."""
+    values = load_api_settings()
+    if digikey is not None:
+        values.update(client_id=digikey[0], client_secret=digikey[1])
+    if mouser is not None:
+        values["api_key"] = mouser
+    credential_store.write_credentials(values)
+    remove_legacy_api_settings()
+
+
+def remove_legacy_api_settings() -> None:
+    for path in dict.fromkeys((_USER_CONFIG_PATH, _CONFIG_PATH)):
+        config = _read_ini(path)
+        changed = False
+        for section, keys in (("digikey", ("client_id", "client_secret")), ("mouser", ("api_key",))):
+            for key in keys:
+                if config.has_option(section, key):
+                    config.remove_option(section, key)
+                    changed = True
+        if changed:
+            _write_ini(config, path)
+
+
+def migrate_api_settings() -> dict[str, str]:
+    stored = credential_store.read_credentials()
+    if stored is not None:
+        remove_legacy_api_settings()
+        return stored
+    legacy = _load_legacy_api_settings()
+    if sys.platform == "win32" and any(legacy.values()):
+        credential_store.write_credentials(legacy)
+        remove_legacy_api_settings()
+    return legacy
+
+
 # ============================================================
 # 内部ユーティリティ
 # ============================================================
 
-def _read_ini() -> configparser.ConfigParser:
-    config = configparser.ConfigParser()
-    if os.path.exists(_CONFIG_PATH):
-        config.read(_CONFIG_PATH, encoding="utf-8")
+def _read_ini(path=None) -> configparser.ConfigParser:
+    config = configparser.ConfigParser(interpolation=None)
+    config.read(path or _CONFIG_PATH, encoding="utf-8")
     return config
 
 
-def _write_ini(config: configparser.ConfigParser) -> None:
-    out_dir = os.path.dirname(_CONFIG_PATH)
-    if out_dir and not os.path.exists(out_dir):
-        os.makedirs(out_dir)
-    with open(_CONFIG_PATH, "w", encoding="utf-8") as f:
-        config.write(f)
+def _write_ini(config: configparser.ConfigParser, path=None) -> None:
+    path = path or _CONFIG_PATH
+    out_dir = os.path.dirname(os.path.abspath(path))
+    os.makedirs(out_dir, exist_ok=True)
+    with NamedTemporaryFile(mode="w", encoding="utf-8", dir=out_dir, delete=False) as stream:
+        pending = stream.name
+        try:
+            config.write(stream)
+            stream.close()
+            os.replace(pending, path)
+        finally:
+            if os.path.exists(pending):
+                stream.close()
+                os.unlink(pending)

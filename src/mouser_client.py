@@ -17,7 +17,8 @@ DigiKey と異なり OAuth2 は不要。APIキー1つで動作します。
 """
 
 import os
-import configparser
+from src.ui_language import tr
+from src.column_config import load_api_settings
 import requests
 
 
@@ -71,20 +72,12 @@ def load_api_key() -> str:
     if key:
         return key
 
-    # 2. config.ini
-    config = configparser.ConfigParser()
-    config_path = os.path.join(os.path.dirname(__file__), "..", "config.ini")
-    config.read(config_path, encoding="utf-8")
-    key = config.get("mouser", "api_key", fallback="")
-    if key and not key.startswith("YOUR_"):
+    key = load_api_settings()["api_key"]
+    if key:
         return key
 
-    raise ValueError(
-        "Mouser APIキーが見つかりません。\n"
-        "環境変数 MOUSER_API_KEY を設定するか、\n"
-        "config.ini の [mouser] セクションに api_key を追加してください。\n"
-        "APIキーは https://www.mouser.com/api-hub/ から申請できます。"
-    )
+    raise ValueError(tr("API設定でMouserの検索APIキーを入力してください。",
+                        "Enter the Mouser Search API key in API settings."))
 
 
 # ============================================================
@@ -142,16 +135,28 @@ class MouserClient:
         resp.raise_for_status()
         data = resp.json()
 
-        # Errors フィールドは「件数0」などの情報メッセージも含むため、
-        # HTTPエラー（401/429 等）は raise_for_status() で処理済みとして
-        # Parts リストのみを参照する。
-        return data.get("SearchResults", {}).get("Parts", []) or []
+        search = data.get("SearchResults")
+        parts = (search or {}).get("Parts") or []
+        if parts:
+            return parts
+        errors = data.get("Errors") or []
+        messages = [
+            str(error.get("Message") or error.get("Code") or "").strip()
+            for error in errors
+        ]
+        if any(message and not message.lower().startswith(
+                ("no match", "no parts found", "no results found"))
+                for message in messages):
+            raise ValueError(tr("Mouser が検索リクエストを拒否しました。APIキーと品番を確認してください。", "Mouser rejected the request. Check your API key and the part number."))
+        if search is None and not errors:
+            raise ValueError(tr("Mouser の検索結果を読み取れませんでした。", "Could not read the Mouser search results."))
+        return []
 
     # ----------------------------------------------------------
     # ライフサイクル判定（DigiKeyClient と同一インターフェース）
     # ----------------------------------------------------------
 
-    def check_lifecycle(self, part_number: str) -> dict:
+    def check_lifecycle(self, part_number: str, manufacturer: str = "") -> dict:
         """
         部品のライフサイクルステータスと代替品を一括取得する。
 
@@ -160,6 +165,7 @@ class MouserClient:
 
         Args:
             part_number (str): 検索する部品番号
+            manufacturer (str): BOM上のメーカー名
 
         Returns:
             dict: {
@@ -188,32 +194,44 @@ class MouserClient:
                 return result
 
             # 完全一致を優先（メーカー品番 or Mouser品番が一致するもの）
-            part = _find_best_match(parts, part_number)
+            part = _find_best_match(parts, part_number, manufacturer)
+            if part is None:
+                exact = _find_best_match(parts, part_number)
+                result["status_label"] = "Manufacturer mismatch" if manufacturer and exact else "Not Found"
+                return result
 
             # ライフサイクル判定
-            status_str = part.get("LifecycleStatus", "") or ""
+            status_str = part.get("LifecycleStatus") or ""
+            if not status_str and str(part.get("IsDiscontinued", "")).lower() in ("true", "yes", "1"):
+                status_str = "Obsolete"
             lifecycle, label = _classify_lifecycle(status_str.strip())
             result["lifecycle"]    = lifecycle
             result["status_label"] = label
+
+            result["source_specs"] = product_specs(part)
+            result["description"] = part.get("Description") or ""
 
             # 代替品（SuggestedReplacement は文字列リストまたは単一文字列）
             suggested = part.get("SuggestedReplacement", "") or ""
             result["substitutes"] = _parse_substitutes(suggested)
 
         except requests.exceptions.Timeout:
-            result["error"] = "タイムアウト（10秒）。再試行してください。"
+            result["error"] = tr("タイムアウト（10秒）。再試行してください。", "The request timed out after 10 seconds. Try again.")
         except requests.exceptions.HTTPError as e:
             code = e.response.status_code
-            if code == 401:
-                result["error"] = "APIキーが無効です。設定を確認してください。"
+            result["stop_check"] = code in (401, 403, 429)
+            if code in (401, 403):
+                result["error"] = tr("APIキーが無効です。設定を確認してください。", "The API key was rejected. Check your settings.")
             elif code == 429:
-                result["error"] = "レート制限中（30回/分）。しばらく待ってから再試行してください。"
+                result["error"] = tr("レート制限中（30回/分）。しばらく待ってから再試行してください。", "Rate limit reached. Wait and try again.")
             else:
-                result["error"] = f"HTTP エラー {code}: {e.response.text[:120]}"
+                result["error"] = tr(f"Mouser APIのHTTPエラー ({code})", f"Mouser API HTTP error ({code})")
+        except requests.exceptions.RequestException:
+            result["error"] = tr("Mouser APIとの通信に失敗しました。", "Could not connect to the Mouser API.")
         except ValueError as e:
             result["error"] = str(e)
-        except Exception as e:
-            result["error"] = f"予期しないエラー: {e}"
+        except Exception:
+            result["error"] = tr("Mouser の応答を処理できませんでした。", "Could not process the Mouser response.")
 
         return result
 
@@ -222,36 +240,35 @@ class MouserClient:
 # ヘルパー関数
 # ============================================================
 
-def _find_best_match(parts: list[dict], query: str) -> dict:
-    """
-    検索結果から最も一致する部品を選択する。
+def product_specs(part: dict) -> list[dict]:
+    specs = [
+        {"name": item["AttributeName"], "value": item["AttributeValue"]}
+        for item in part.get("ProductAttributes") or []
+        if item.get("AttributeName") and item.get("AttributeValue")
+    ]
+    if part.get("Packaging"):
+        specs.append({"name": "Packaging", "value": part["Packaging"]})
+    return specs
 
-    優先順位:
-      1. メーカー品番の完全一致（大文字小文字無視）
-      2. Mouser品番の完全一致
-      3. 最初の結果
 
-    Args:
-        parts (list[dict]): search_part() の戻り値
-        query (str): 検索した部品番号
-
-    Returns:
-        dict: 最もマッチした部品情報
-    """
-    q = query.lower().strip()
-
-    # 1. メーカー品番の完全一致
-    for p in parts:
-        if p.get("ManufacturerPartNumber", "").lower().strip() == q:
-            return p
-
-    # 2. Mouser品番の完全一致
-    for p in parts:
-        if p.get("MouserPartNumber", "").lower().strip() == q:
-            return p
-
-    # 3. 最初の結果
-    return parts[0]
+def _find_best_match(parts: list[dict], query: str, manufacturer: str = "") -> dict | None:
+    """Prefer an exact distributor SKU, then an exact manufacturer part."""
+    query = query.casefold().strip()
+    manufacturer = str(manufacturer or "").casefold().strip()
+    if manufacturer:
+        parts = [part for part in parts if manufacturer in {
+            (part.get("Manufacturer") or "").casefold().strip(),
+            (part.get("ActualMfrName") or "").casefold().strip(),
+        }]
+    for part in parts:
+        if (part.get("MouserPartNumber") or "").casefold().strip() == query:
+            return part
+    matches = [part for part in parts
+               if (part.get("ManufacturerPartNumber") or "").casefold().strip() == query]
+    if not matches:
+        return None
+    return max(matches, key=lambda part: (bool(part.get("SuggestedReplacement")),
+                                          bool(part.get("LifecycleStatus"))))
 
 
 def _classify_lifecycle(status_str: str) -> tuple[str, str]:
@@ -268,15 +285,12 @@ def _classify_lifecycle(status_str: str) -> tuple[str, str]:
         return LIFECYCLE_OBSOLETE, status_str or "Obsolete"
     if status_str in NRND_STATUSES:
         return LIFECYCLE_NRND, status_str or "NRND"
-    if status_str in ("Active", "New Product", ""):
-        # 空文字は在庫ありの現行品として扱う
-        label = status_str if status_str else "Active"
-        return LIFECYCLE_ACTIVE, label
-    # 未知のステータスは NRND 相当として扱う
-    return LIFECYCLE_NRND, status_str
+    if status_str in ("Active", "New Product"):
+        return LIFECYCLE_ACTIVE, status_str
+    return LIFECYCLE_UNKNOWN, status_str or "Unknown"
 
 
-def _parse_substitutes(suggested: str) -> list[dict]:
+def _parse_substitutes(suggested: str | list[str]) -> list[dict]:
     """
     Mouser の SuggestedReplacement フィールドを代替品リストに変換する。
 
@@ -292,17 +306,16 @@ def _parse_substitutes(suggested: str) -> list[dict]:
     if not suggested:
         return []
 
-    substitutes = []
-    for pn in suggested.split(","):
-        pn = pn.strip()
-        if pn:
-            substitutes.append({
-                "mfr_part_number":     pn,
-                "digikey_part_number": "",   # Mouserには DigiKey品番なし
-                "manufacturer":        "",   # 品番のみなのでメーカー名は不明
-                "description":         "",
-                "source":              "mouser",
-            })
+    values = suggested if isinstance(suggested, list) else [suggested]
+    part_numbers = dict.fromkeys(
+        part.strip() for value in values if isinstance(value, str)
+        for part in value.replace(";", ",").split(",") if part.strip()
+    )
+    substitutes = [
+        {"mfr_part_number": "", "mouser_part_number": pn,
+         "manufacturer": "", "description": "", "source": "mouser"}
+        for pn in part_numbers
+    ]
     return substitutes
 
 

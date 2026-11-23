@@ -52,8 +52,8 @@ def find_quantity_changes(
     col          = get_column_names()["quantity"]
     common_index = old_df.index.intersection(new_df.index)
 
-    old_qty = pd.to_numeric(old_df.loc[common_index, col], errors="coerce")
-    new_qty = pd.to_numeric(new_df.loc[common_index, col], errors="coerce")
+    old_qty = pd.to_numeric(old_df.loc[common_index, col])
+    new_qty = pd.to_numeric(new_df.loc[common_index, col])
 
     changed_mask  = (old_qty != new_qty) & ~(old_qty.isna() & new_qty.isna())
     changed_index = common_index[changed_mask]

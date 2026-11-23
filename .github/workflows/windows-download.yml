@@ -1,0 +1,90 @@
+name: Windows download
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.event_name != 'release' || !contains(github.event.release.assets.*.name, 'release-metadata.json')
+    runs-on: windows-2025
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          architecture: x64
+      - run: python -m venv build/package-env
+      - run: ./build/package-env/Scripts/python.exe -m pip install --upgrade "pip>=26.2"
+      - run: ./build/package-env/Scripts/python.exe -m pip install -r requirements.txt pyinstaller pytest
+      - run: ./build/package-env/Scripts/python.exe -B -m pytest -q --junitxml=build/release-tests.xml
+      - name: Audit build dependencies
+        run: |
+          $sitePackages = ./build/package-env/Scripts/python.exe -c "import sysconfig; print(sysconfig.get_path('purelib'))"
+          python -m venv build/audit-tools
+          build/audit-tools\Scripts\python.exe -m pip install pip-audit
+          build/audit-tools\Scripts\python.exe -m pip_audit --path "$sitePackages" --format json --output build/dependency-audit.json
+      - run: ./build/package-env/Scripts/python.exe tools/build_windows.py
+      - name: Build installer
+        run: |
+          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          ./build/package-env/Scripts/python.exe tools/build_installer.py --iscc "$compiler"
+      - run: ./build/package-env/Scripts/python.exe tools/release_metadata.py --tests build/release-tests.xml --audit build/dependency-audit.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BOM-Diff-Tool-Windows-x64
+          path: |
+            dist/BOM-Diff-Tool-Windows-x64.zip
+            dist/BOM-Diff-Tool-Setup-Windows-x64.exe
+            dist/BOM-Diff-Tool-Build-Source.zip
+            dist/release-metadata.json
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Windows verification results
+          path: |
+            build/release-tests.xml
+            build/dependency-audit.json
+
+  verify-installer:
+    needs: build
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: BOM-Diff-Tool-Windows-x64
+      - name: Verify install and demo on a separate Windows runner
+        run: ./tools/verify_installer.ps1 -Installer BOM-Diff-Tool-Setup-Windows-x64.exe -ResultPath installer-verification.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows installer verification
+          path: installer-verification.json
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'release'
+    needs: verify-installer
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: BOM-Diff-Tool-Windows-x64
+      - uses: actions/download-artifact@v4
+        with:
+          name: Windows installer verification
+      - name: Attach Windows downloads to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload --repo "$GITHUB_REPOSITORY" -- "$RELEASE_TAG" BOM-Diff-Tool-Windows-x64.zip BOM-Diff-Tool-Setup-Windows-x64.exe BOM-Diff-Tool-Build-Source.zip release-metadata.json SHA256SUMS.txt installer-verification.json

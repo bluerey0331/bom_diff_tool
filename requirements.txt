@@ -9,3 +9,5 @@ openpyxl>=3.1.0
 
 # DigiKey API 通信（オプション：DigiKey連携を使わない場合は不要）
 requests>=2.31.0
+
+pywin32-ctypes>=0.2.3; sys_platform == "win32"

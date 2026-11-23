@@ -9,6 +9,7 @@ main.py - BOM比較ツールのエントリーポイント
 
 import argparse
 import sys
+from pathlib import Path
 
 
 def parse_args() -> argparse.Namespace:
@@ -43,6 +44,10 @@ def parse_args() -> argparse.Namespace:
         "--output",
         default="bom_diff_report.xlsx",
         help="出力レポートのパス（CLIモード用、デフォルト: bom_diff_report.xlsx）",
+    )
+    parser.add_argument(
+        "--language", choices=("ja", "en"),
+        help="Interface language (ja or en)",
     )
     return parser.parse_args()
 
@@ -87,6 +92,10 @@ def run_gui() -> None:
 
 if __name__ == "__main__":
     args = parse_args()
+    from src import ui_language
+
+    executable = Path(sys.executable).stem
+    ui_language.language = args.language or ("en" if executable.endswith("(English)") else "ja")
 
     if args.cli:
         # --cli フラグがあればCLIモード
