@@ -5,81 +5,19 @@ BOM（部品表）を比較して差分を検出する Python 製デスクトッ
 
 **[English README is here → README.md](README.md)**
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│  ⬡  BOM Diff Tool          v2.2  +  DigiKey / Mouser API   │
-├───────────────┬──────────────────────────────────────────────┤
-│ OLD BOM FILE  │  ┌─ タブ ─────────────────────────────────┐ │
-│ [old.xlsx  ]… │  │ ＋Added │－Removed │△Qty │△Mfr │⚡Life │ │
-│               │  ├─────────────────────────────────────────┤ │
-│ NEW BOM FILE  │  │ Part Number  │ Mfr Name │ Qty  │  ...   │ │
-│ [new.xlsx  ]… │  │ GRM188R61... │ Murata   │ 100  │  ...   │ │
-│               │  └─────────────────────────────────────────┘ │
-│ ▶ Compare    │                                               │
-│ ─────────────│  ⚡ Lifecycle タブ                             │
-│ DIGIKEY API  │  ┌─────────────────────────────────────────┐ │
-│ Client ID    │  │ Part Number  │ Status    │ ...           │ │
-│ [••••••••••] │  │ GRM188R61... │ Obsolete  │ ...           │ │
-│ Client Secret│  │ LQW18AN10... │ Active    │ ...           │ │
-│ [••••••••••] │  │ RC0402JR-... │ Not Found │ ...           │ │
-│⚡ Check DK   │  └─────────────────────────────────────────┘ │
-│ ─────────────│  SUBSTITUTES  (DigiKey / Mouser)              │
-│ MOUSER API   │  ┌─────────────────────────────────────────┐ │
-│ API Key      │  │ Mfr Part No │ DK/Mouser P/N │ Source    │ │
-│ [••••••••••] │  └─────────────────────────────────────────┘ │
-│⚡ Check MS   │                                               │
-│ ─────────────│                                     ⚙ 設定   │
-│ SUMMARY      │                                               │
-│ Added    [ 1]│                                               │
-│ Removed  [ 1]│                                               │
-│ Qty Δ    [ 1]│                                               │
-│ Mfr Δ    [ 1]│                                               │
-│ Obsolete [ 2]│                                               │
-│ NRND     [ 1]│                                               │
-│↓ Save Report │                                               │
-└───────────────┴──────────────────────────────────────────────┘
-```
-
----
-
 ## デモ
 
-2つのBOMファイルを指定して **▶ Compare** を押すだけ — 追加・削除・変更された部品がタブ別に色分けで即座に表示されます。
+**デモを開く** を押すと、同梱の旧・新BOMを比較します。GIFでは追加部品、数量変更、Mouserの代替品候補の表示例、Excelレポートの保存を確認できます。
 
-![Demo](demo.gif)
+![BOM比較とExcel出力の日本語デモ](demo-ja.gif)
 
-| フェーズ | 画面に映っていること |
-|---|---|
-| **入力** | ファイルパスを入力 — Excelのヘッダーからカラム名を自動認識 |
-| **▶ Compare** | バックグラウンドで差分処理。プログレスバーがアニメーション |
-| **Added タブ** | 新規追加部品が緑色で表示（品番・メーカー・数量） |
-| **タブ切り替え** | Removed → Qty Changed タブも独立して差分を表示 |
-| **サマリーバッジ** | Added・Removed・Qty Δ・Mfr Δ の件数がサイドバーに大きく表示 |
+### 比較結果と代替品候補
 
----
+![日本語版の比較結果](screenshots/v3.1.0-comparison-ja.png)
 
-## スクリーンショット
+![日本語版の代替品候補](screenshots/v3.1.0-replacements-ja.png)
 
-**① ファイル選択 — パスを入力するとカラム名が自動認識される**
-
-![ファイル選択](screenshots/01_files_loaded.png)
-
-左パネルはカード型で整理されています。上から **BOM FILES**（ファイル入力）、**DigiKey / Mouser API**（認証情報）、**Summary**（差分件数バッジ）の順に並んでいます。
-
-**② ▶ Compare 後 — Added タブに追加部品が緑色の行で表示される**
-
-![比較結果](screenshots/02_compare_result.png)
-
-ステータスバーにリアルタイムで結果が表示されます（`Done — 5 difference(s) · 6 parts in new BOM`）。
-**DigiKeyで確認** または **Mouserで確認** ボタンが有効になり、新規部品のライフサイクルチェックを実行できます。
-
-**③ bom_diff_report.xlsx に書き出し — 差分カテゴリごとにシートが分かれる**
-
-![レポート保存](screenshots/03_report_saved.png)
-
-**③ Excel レポート（bom_diff_report.xlsx）が差分シート別に保存される**
-
-![レポート保存](screenshots/03_report_saved.png)
+代替品の画面には、過去にMouserの実APIで確認した応答例を使っています。実際の照会にはAPIキーが必要で、カタログの更新により結果が変わることがあります。
 
 ---
 

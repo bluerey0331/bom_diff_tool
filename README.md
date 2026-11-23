@@ -5,77 +5,19 @@ Supports lifecycle checking (Obsolete / NRND detection) via the **DigiKey API** 
 
 **[日本語版はこちら → README_JP.md](README_JP.md)**
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│  ⬡  BOM Diff Tool          v2.2  +  DigiKey / Mouser API   │
-├───────────────┬──────────────────────────────────────────────┤
-│ OLD BOM FILE  │  ┌─ Tabs ──────────────────────────────────┐ │
-│ [old.xlsx  ]… │  │ ＋Added │－Removed │△Qty │△Mfr │⚡Life │ │
-│               │  ├─────────────────────────────────────────┤ │
-│ NEW BOM FILE  │  │ Part Number  │ Mfr Name │ Qty  │  ...   │ │
-│ [new.xlsx  ]… │  │ GRM188R61... │ Murata   │ 100  │  ...   │ │
-│               │  └─────────────────────────────────────────┘ │
-│ ▶ Compare    │                                               │
-│ ─────────────│  ⚡ Lifecycle Tab                              │
-│ DIGIKEY API  │  ┌─────────────────────────────────────────┐ │
-│ Client ID    │  │ Part Number  │ Status    │ ...           │ │
-│ [••••••••••] │  │ GRM188R61... │ Obsolete  │ ...           │ │
-│ Client Secret│  │ LQW18AN10... │ Active    │ ...           │ │
-│ [••••••••••] │  │ RC0402JR-... │ Not Found │ ...           │ │
-│⚡ Check DK   │  └─────────────────────────────────────────┘ │
-│ ─────────────│  SUBSTITUTES  (DigiKey / Mouser)              │
-│ MOUSER API   │  ┌─────────────────────────────────────────┐ │
-│ API Key      │  │ Mfr Part No │ DK/Mouser P/N │ Source    │ │
-│ [••••••••••] │  └─────────────────────────────────────────┘ │
-│⚡ Check MS   │                                               │
-│ ─────────────│                                    ⚙ Settings│
-│ SUMMARY      │                                               │
-│ Added    [ 1]│                                               │
-│ Removed  [ 1]│                                               │
-│ Qty Δ    [ 1]│                                               │
-│ Mfr Δ    [ 1]│                                               │
-│ Obsolete [ 2]│                                               │
-│ NRND     [ 1]│                                               │
-│↓ Save Report │                                               │
-└───────────────┴──────────────────────────────────────────────┘
-```
-
----
-
 ## Demo
 
-Point to your two BOM files, hit **▶ Compare** — every added, removed, and changed part surfaces instantly across color-coded tabs.
+Select **Open demo** to compare the bundled BOMs. The demo shows an added part, a quantity change, an example Mouser replacement, and Excel report export.
 
-![Demo](demo.gif)
+![English demo of BOM comparison and Excel export](demo.gif)
 
-| Phase | What you see |
-|---|---|
-| **Typing** | File paths entered — column names are auto-detected from the Excel headers |
-| **▶ Compare** | BOM diff runs in the background; progress bar animates while processing |
-| **Added tab** | New parts highlighted in green with part number, manufacturer, and quantity |
-| **Tab sweep** | Removed → Qty Changed tabs each show their own categorized diff |
-| **Summary badges** | Added · Removed · Qty Δ · Mfr Δ counts shown at a glance in the sidebar |
+### Comparison and replacement candidates
 
----
+![English comparison results](screenshots/v3.1.0-comparison-en.png)
 
-## Screenshots
+![English replacement candidates](screenshots/v3.1.0-replacements-en.png)
 
-**① File selection — paths typed in, column headers auto-recognized**
-
-![File selection](screenshots/01_files_loaded.png)
-
-The left panel groups inputs into cards: **BOM FILES** at the top, **DigiKey / Mouser API** credentials below, and **Summary badges** at the bottom.
-
-**② After ▶ Compare — added parts appear as green rows in the Added tab**
-
-![Comparison result](screenshots/02_compare_result.png)
-
-The status bar shows a live summary (`Done — 5 difference(s) · 6 parts in new BOM`).
-The **DigiKeyで確認** and **Mouserで確認** buttons become active — click either to run a lifecycle check on the new parts.
-
-**③ Results exported to bom_diff_report.xlsx — one sheet per diff category**
-
-![Report saved](screenshots/03_report_saved.png)
+The replacement screen uses an example response previously verified with Mouser. A live lookup requires an API key and can return different results if the catalog changes.
 
 ---
 
